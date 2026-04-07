@@ -100,13 +100,22 @@ function runCmd(
   })
 }
 
+/**
+ * Reject paths that are empty, non-absolute, contain NULs, or start with a
+ * dash — execFile avoids shell injection, but both git and td will interpret
+ * a leading-dash path as an option flag.
+ */
+function validPath(p: string): boolean {
+  return typeof p === 'string' && p.length > 0 && p.startsWith('/') && !p.includes('\0')
+}
+
 ipcMain.handle('opencode:diff', async (_e, path: string) => {
-  if (!path) return { stdout: '', stderr: 'no path', code: 1 }
+  if (!validPath(path)) return { stdout: '', stderr: 'invalid path', code: 1 }
   return runCmd('git', ['-C', path, 'diff', '--no-color'], path)
 })
 
 ipcMain.handle('opencode:todo', async (_e, path: string) => {
-  if (!path) return { stdout: '', stderr: 'no path', code: 1 }
+  if (!validPath(path)) return { stdout: '', stderr: 'invalid path', code: 1 }
   return runCmd('td', ['usage', '-q', '-w', path], path)
 })
 
