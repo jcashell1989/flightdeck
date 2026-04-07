@@ -206,7 +206,8 @@ function ConversationTab({
   const showBanner =
     session.state === 'approval' ||
     session.state === 'question' ||
-    session.state === 'review'
+    session.state === 'review' ||
+    session.state === 'error'
 
   return (
     <>
@@ -410,21 +411,27 @@ function AttentionBanner({
       ? 'var(--border-approval)'
       : session.state === 'question'
         ? 'var(--border-question)'
-        : 'var(--border-review)'
+        : session.state === 'error'
+          ? 'var(--border-error)'
+          : 'var(--border-review)'
 
   const tint =
     session.state === 'approval'
       ? 'var(--tint-approval)'
       : session.state === 'question'
         ? 'var(--tint-question)'
-        : 'var(--tint-review)'
+        : session.state === 'error'
+          ? 'var(--tint-error)'
+          : 'var(--tint-review)'
 
   const label =
     session.state === 'approval'
       ? 'WAITING FOR APPROVAL'
       : session.state === 'question'
         ? 'WAITING FOR INPUT'
-        : 'REVIEW CHANGES'
+        : session.state === 'error'
+          ? 'AGENT ERROR'
+          : 'REVIEW CHANGES'
 
   const respond = async (response: 'once' | 'reject') => {
     if (useMock) {

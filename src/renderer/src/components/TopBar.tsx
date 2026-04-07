@@ -11,6 +11,11 @@ interface TopBarProps {
 // Avoids a flash on every launch when hydrate completes within ~half a second.
 const CONNECTING_BANNER_GRACE_MS = 600
 
+// macOS traffic-light buttons need ~68px of left inset before our title.
+// On Windows/Linux there are no traffic lights, so the inset is 0.
+const isMac = typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('mac')
+const TITLE_INSET = isMac ? 68 : 12
+
 export function TopBar({ sessions, connectionStatus = 'disabled', onCmdKClick }: TopBarProps) {
   const attentionCount = sessions.filter((s) => isAttention(s.state)).length
   const runningCount = sessions.filter((s) => s.state === 'running').length
@@ -39,12 +44,11 @@ export function TopBar({ sessions, connectionStatus = 'disabled', onCmdKClick }:
         padding: '0 16px',
         borderBottom: '1px solid var(--border)',
         backgroundColor: 'var(--bg-panel)',
-        // @ts-expect-error Electron-specific CSS property
         WebkitAppRegion: 'drag',
         flexShrink: 0
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 68 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: TITLE_INSET }}>
         <span
           style={{
             width: 6,
@@ -58,7 +62,6 @@ export function TopBar({ sessions, connectionStatus = 'disabled', onCmdKClick }:
         </span>
       </div>
 
-      {/* @ts-expect-error Electron-specific CSS property */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, WebkitAppRegion: 'no-drag' }}>
         {showConnectionBanner && (
           <span
