@@ -21,7 +21,17 @@ export function ProjectGroup({ project, focusedSessionId, onSessionClick }: Proj
     <div style={{ marginBottom: 24 }}>
       {/* Project header */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsed}
+        aria-label={`${project.name} project, ${collapsed ? 'collapsed' : 'expanded'}`}
         onClick={() => setCollapsed(!collapsed)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setCollapsed(!collapsed)
+          }
+        }}
         style={{
           display: 'flex',
           alignItems: 'center',

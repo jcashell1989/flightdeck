@@ -74,7 +74,15 @@ export function SessionCard({ session, focused, onClick }: SessionCardProps) {
 
   return (
     <div
+      role="button"
+      aria-label={`${session.agentType} session ${session.id.slice(-4)}, ${session.state}: ${session.currentAction}`}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
       tabIndex={0}
       style={{
         height: 88,

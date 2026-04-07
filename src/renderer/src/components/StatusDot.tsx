@@ -11,9 +11,20 @@ const STATUS_COLORS: Record<SessionState, string> = {
 
 const PULSING: Set<SessionState> = new Set(['approval', 'question'])
 
+const STATUS_LABELS: Record<SessionState, string> = {
+  running: 'Running',
+  idle: 'Idle',
+  approval: 'Needs approval',
+  question: 'Has question',
+  review: 'Review changes',
+  error: 'Error'
+}
+
 export function StatusDot({ state }: { state: SessionState }) {
   return (
     <span
+      role="img"
+      aria-label={`Status: ${STATUS_LABELS[state]}`}
       className={PULSING.has(state) ? 'status-dot--pulsing' : undefined}
       style={{
         display: 'inline-block',

@@ -34,7 +34,8 @@ export function Sessions({ projects, onSessionClick }: SessionsProps) {
   return (
     <div>
       <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: 16 }}>Sessions</h2>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
         <thead>
           <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--fg-subtle)', textAlign: 'left' }}>
             <th style={{ padding: '6px 8px', fontWeight: 500 }}>Status</th>
@@ -48,7 +49,16 @@ export function Sessions({ projects, onSessionClick }: SessionsProps) {
           {allSessions.map((s) => (
             <tr
               key={s.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`${s.agentType} session ${s.id.slice(-4)}, ${STATUS_LABELS[s.state]}`}
               onClick={() => onSessionClick(s)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onSessionClick(s)
+                }
+              }}
               style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
             >
               <td style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -65,6 +75,7 @@ export function Sessions({ projects, onSessionClick }: SessionsProps) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
