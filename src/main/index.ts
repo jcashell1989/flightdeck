@@ -2,6 +2,7 @@ import { app, BrowserWindow, nativeTheme, ipcMain, webContents } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { configStore, AppConfig } from './config/store'
+import { opencodeRegistry } from './opencode/registry'
 
 ipcMain.handle('get-theme', () => {
   return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
@@ -10,9 +11,18 @@ ipcMain.handle('get-theme', () => {
 ipcMain.handle('config:get', () => configStore.get())
 ipcMain.handle('config:set', (_e, patch: Partial<AppConfig>) => configStore.set(patch))
 
+ipcMain.handle('opencode:snapshot', () => opencodeRegistry.snapshot())
+
 configStore.on('change', (cfg: AppConfig) => {
   for (const wc of webContents.getAllWebContents()) {
     if (!wc.isDestroyed()) wc.send('config-changed', cfg)
+  }
+})
+
+opencodeRegistry.on('change', () => {
+  const snap = opencodeRegistry.snapshot()
+  for (const wc of webContents.getAllWebContents()) {
+    if (!wc.isDestroyed()) wc.send('opencode:snapshot', snap)
   }
 })
 
@@ -51,11 +61,16 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   await configStore.init()
+  opencodeRegistry.start()
   createWindow()
 })
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('before-quit', () => {
+  opencodeRegistry.dispose()
 })
 
 app.on('activate', () => {
