@@ -56,18 +56,15 @@ export function deriveState(s: InternalSessionState): NormalizedSessionState {
   }
 }
 
-function sessionIdShort(id: string): string {
-  // opencode session IDs are long hashes; display the last 4 chars for parity
-  // with the existing mock data format.
-  return id.slice(-4)
-}
-
 export function toNormalizedSession(
   s: InternalSessionState,
   projectId: string
 ): NormalizedSession {
+  // Use the full SDK id as the canonical id. Display shortening (last 4 chars)
+  // is the renderer's job — see SessionCard / Sessions.tsx — so that the
+  // identity used for React keys, focus tracking, and IPC lookups is unique.
   return {
-    id: sessionIdShort(s.meta.id),
+    id: s.meta.id,
     agentType: 'opencode',
     state: deriveState(s),
     currentAction: s.currentAction,
@@ -111,6 +108,8 @@ export function groupIntoProjects(
 }
 
 function basenameOf(path: string): string {
+  // Unix-only — opencode normalizes directories to forward slashes, and the
+  // server is not supported on Windows. Revisit if that ever changes.
   const stripped = path.replace(/\/+$/, '')
   const idx = stripped.lastIndexOf('/')
   return idx >= 0 ? stripped.slice(idx + 1) : stripped
@@ -177,7 +176,10 @@ export function applyEvent(
       return true
     }
     case 'permission.updated': {
-      const perm = event.properties as unknown as SdkPermission
+      // Per SDK types.gen.d.ts:386, EventPermissionUpdated.properties IS the
+      // Permission object directly (not wrapped). Verified against
+      // @opencode-ai/sdk@1.3.17.
+      const perm: SdkPermission = event.properties
       const s = states.get(perm.sessionID)
       if (!s) return false
       s.pendingPermissions.add(perm.id)
@@ -196,11 +198,10 @@ export function applyEvent(
       return changed
     }
     case 'message.part.updated': {
-      const { part } = event.properties as { part: SdkPart }
-      // part carries sessionID on every variant
-      const sessionID = (part as { sessionID?: string }).sessionID
-      if (!sessionID) return false
-      const s = states.get(sessionID)
+      // Every Part variant carries sessionID per types.gen.d.ts (line 347 and
+      // each *Part subtype). No narrowing cast needed.
+      const part: SdkPart = event.properties.part
+      const s = states.get(part.sessionID)
       if (!s) return false
       s.currentAction = describePart(part)
       s.lastActivity = Date.now()

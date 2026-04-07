@@ -1,17 +1,21 @@
 /**
  * OpencodeInstanceClient — connects to one `opencode serve` instance.
  *
- * Responsibilities:
- * - Hydrate initial state via client.session.list() + client.session.status().
- * - Subscribe to `${baseUrl}/event` SSE stream.
- * - Apply incoming events via the pure mapper.
- * - Emit 'change' when the snapshot mutates and 'status' when connection
- *   state changes.
- * - Reconnect with exponential backoff (1s → 30s cap) on network error.
+ * Lifecycle:
+ * - openEventStream() first, with events queued into a buffer.
+ * - hydrate() snapshots session.list() / session.status().
+ * - Buffered events are then replayed against the hydrated state, so we
+ *   never lose an event that arrived during the hydrate window (S1).
+ * - Subsequent events apply directly.
+ *
+ * Reconnect: exponential backoff (1s → 30s cap) on EventSource error or
+ * hydrate failure. The `eventsource` lib's built-in reconnect is unreliable
+ * against a fully-down server, so we manage it ourselves.
  */
 import { EventEmitter } from 'events'
 import { createOpencodeClient, type OpencodeClient } from '@opencode-ai/sdk'
 import { EventSource } from 'eventsource'
+import type { Event as SdkEvent } from '@opencode-ai/sdk'
 import type { OpencodeInstance } from '../config/store'
 import {
   InternalSessionState,
@@ -23,6 +27,20 @@ import type { InstanceConnectionStatus, InstanceSnapshot } from './types'
 
 const BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000]
 
+// Known opencode event types — used to register named SSE listeners as a
+// defensive fallback in case the server emits `event: <type>\ndata: ...`
+// rather than the default `message` event we listen on via onmessage.
+const KNOWN_EVENT_TYPES = [
+  'session.updated',
+  'session.deleted',
+  'session.status',
+  'session.idle',
+  'session.error',
+  'permission.updated',
+  'permission.replied',
+  'message.part.updated'
+] as const
+
 export class OpencodeInstanceClient extends EventEmitter {
   private sdk: OpencodeClient
   private baseUrl: string
@@ -33,6 +51,9 @@ export class OpencodeInstanceClient extends EventEmitter {
   private reconnectAttempt = 0
   private reconnectTimer: NodeJS.Timeout | null = null
   private disposed = false
+  // Buffer for events that arrive between openEventStream() and hydrate()
+  // completion. While non-null, applyEvent is deferred.
+  private eventBuffer: SdkEvent[] | null = null
 
   constructor(public readonly instance: OpencodeInstance) {
     super()
@@ -43,14 +64,30 @@ export class OpencodeInstanceClient extends EventEmitter {
   async connect(): Promise<void> {
     if (this.disposed) return
     this.setStatus('connecting')
+    this.eventBuffer = []
     try {
-      await this.hydrate()
       this.openEventStream()
+      await this.hydrate()
+      // Replay any events that landed during hydrate, then go live.
+      const buffered = this.eventBuffer
+      this.eventBuffer = null
+      let mutated = false
+      if (buffered) {
+        for (const ev of buffered) {
+          if (applyEvent(this.sessions, ev)) mutated = true
+        }
+      }
       this.reconnectAttempt = 0
       this.setStatus('connected')
       this.emit('change', this.snapshot())
+      if (mutated) this.emit('change', this.snapshot())
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err)
+      this.eventBuffer = null
+      if (this.es) {
+        this.es.close()
+        this.es = null
+      }
       this.setStatus('error')
       this.scheduleReconnect()
     }
@@ -92,8 +129,24 @@ export class OpencodeInstanceClient extends EventEmitter {
         const s = this.sessions.get(id)
         if (s) s.sdkStatus = sdkStatus
       }
-    } catch {
-      // session.status is a convenience — if it fails, we still have list
+    } catch (err) {
+      // session.status is a convenience — if it fails, we still have list.
+      // Surface a warning so reviewers see SDK shape drift instead of silent.
+      console.warn('[opencode] session.status failed during hydrate:', err)
+    }
+  }
+
+  private handleRawEvent(raw: string): void {
+    try {
+      const event = JSON.parse(raw) as SdkEvent
+      if (this.eventBuffer) {
+        this.eventBuffer.push(event)
+        return
+      }
+      const mutated = applyEvent(this.sessions, event)
+      if (mutated) this.emit('change', this.snapshot())
+    } catch (err) {
+      console.error('[opencode] failed to parse event', err)
     }
   }
 
@@ -106,20 +159,18 @@ export class OpencodeInstanceClient extends EventEmitter {
     const es = new EventSource(url)
     this.es = es
 
-    es.onmessage = (ev: MessageEvent): void => {
-      try {
-        const event = JSON.parse(ev.data)
-        const mutated = applyEvent(this.sessions, event)
-        if (mutated) this.emit('change', this.snapshot())
-      } catch (err) {
-        console.error('[opencode] failed to parse event', err)
-      }
+    // Default `message` event — opencode's standard frame.
+    es.onmessage = (ev: MessageEvent): void => this.handleRawEvent(ev.data)
+
+    // Defensive: if the server emits `event: <type>\ndata: ...` (named SSE
+    // events), onmessage will never fire. Register listeners for every
+    // known type so the client is robust to either framing style.
+    for (const type of KNOWN_EVENT_TYPES) {
+      es.addEventListener(type, (ev: MessageEvent) => this.handleRawEvent(ev.data))
     }
 
     es.onerror = (): void => {
       if (this.disposed) return
-      // EventSource's built-in reconnect is unreliable against a dead server;
-      // take over manually.
       if (this.es) {
         this.es.close()
         this.es = null

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AppConfig, OpencodeInstance } from '../types'
 
 interface SettingsProps {
@@ -47,7 +47,7 @@ export function Settings({ config, setConfig }: SettingsProps) {
           instances={config.opencode.instances}
           onChange={updateInstances}
         />
-        <Hint>One row per running <code>opencode serve</code>. Default port 4096.</Hint>
+        <Hint>One row per running <code>opencode serve</code>. Default port 4096. Edits commit on blur or Enter.</Hint>
       </Section>
     </div>
   )
@@ -72,6 +72,8 @@ function Hint({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: 11, color: 'var(--fg-subtle)', marginTop: 6 }}>{children}</div>
 }
 
+const keyOf = (i: { host: string; port: number }): string => `${i.host}:${i.port}`
+
 function InstanceList({
   instances,
   onChange
@@ -82,17 +84,46 @@ function InstanceList({
   const [draftHost, setDraftHost] = useState('127.0.0.1')
   const [draftPort, setDraftPort] = useState('4096')
   const [draftLabel, setDraftLabel] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
-  const update = (idx: number, patch: Partial<OpencodeInstance>): void => {
-    onChange(instances.map((i, k) => (k === idx ? { ...i, ...patch } : i)))
+  const commitRow = (idx: number, next: OpencodeInstance): void => {
+    // Reject duplicates against other rows. The registry keys clients by
+    // host:port so a duplicate would silently dedupe and confuse the UI.
+    const dupe = instances.some((i, k) => k !== idx && keyOf(i) === keyOf(next))
+    if (dupe) {
+      setError(`duplicate instance ${keyOf(next)} — edit ignored`)
+      return
+    }
+    setError(null)
+    onChange(instances.map((i, k) => (k === idx ? next : i)))
   }
+
   const remove = (idx: number): void => {
+    setError(null)
     onChange(instances.filter((_, k) => k !== idx))
   }
+
   const add = (): void => {
     const port = parseInt(draftPort, 10)
-    if (!draftHost || !Number.isFinite(port)) return
-    onChange([...instances, { host: draftHost, port, label: draftLabel || undefined }])
+    if (!draftHost.trim()) {
+      setError('host is required')
+      return
+    }
+    if (!Number.isFinite(port) || port < 1 || port > 65535) {
+      setError('port must be an integer in 1–65535')
+      return
+    }
+    const candidate: OpencodeInstance = {
+      host: draftHost.trim(),
+      port,
+      label: draftLabel.trim() || undefined
+    }
+    if (instances.some((i) => keyOf(i) === keyOf(candidate))) {
+      setError(`instance ${keyOf(candidate)} already exists`)
+      return
+    }
+    setError(null)
+    onChange([...instances, candidate])
     setDraftLabel('')
   }
 
@@ -109,32 +140,12 @@ function InstanceList({
         </thead>
         <tbody>
           {instances.map((inst, idx) => (
-            <tr key={idx} style={{ borderTop: '1px solid var(--border)' }}>
-              <td style={{ padding: '4px 8px' }}>
-                <Input value={inst.host} onChange={(v) => update(idx, { host: v })} />
-              </td>
-              <td style={{ padding: '4px 8px', width: 80 }}>
-                <Input
-                  value={String(inst.port)}
-                  onChange={(v) => {
-                    const n = parseInt(v, 10)
-                    if (Number.isFinite(n)) update(idx, { port: n })
-                  }}
-                />
-              </td>
-              <td style={{ padding: '4px 8px' }}>
-                <Input value={inst.label ?? ''} onChange={(v) => update(idx, { label: v || undefined })} />
-              </td>
-              <td style={{ padding: '4px 8px', width: 24 }}>
-                <button
-                  onClick={() => remove(idx)}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--fg-subtle)', cursor: 'pointer' }}
-                  aria-label="Remove instance"
-                >
-                  ✕
-                </button>
-              </td>
-            </tr>
+            <InstanceRow
+              key={`${idx}-${keyOf(inst)}`}
+              instance={inst}
+              onCommit={(next) => commitRow(idx, next)}
+              onRemove={() => remove(idx)}
+            />
           ))}
           <tr style={{ borderTop: '1px solid var(--border)' }}>
             <td style={{ padding: '4px 8px' }}>
@@ -157,15 +168,116 @@ function InstanceList({
           </tr>
         </tbody>
       </table>
+      {error && (
+        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--status-error)' }}>{error}</div>
+      )}
     </div>
   )
 }
 
-function Input({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+/**
+ * One editable row. Holds local draft state for host/port/label and only
+ * commits to parent (which writes to ConfigStore + tears down/rebuilds the
+ * live client) on blur or Enter — never on every keystroke (B1 in code
+ * review). Reverts to canonical value on Escape.
+ */
+function InstanceRow({
+  instance,
+  onCommit,
+  onRemove
+}: {
+  instance: OpencodeInstance
+  onCommit: (next: OpencodeInstance) => void
+  onRemove: () => void
+}) {
+  const [host, setHost] = useState(instance.host)
+  const [port, setPort] = useState(String(instance.port))
+  const [label, setLabel] = useState(instance.label ?? '')
+
+  // Resync local draft if parent value changes (e.g. another commit happened
+  // elsewhere) and we don't currently have a divergent draft.
+  useEffect(() => {
+    setHost(instance.host)
+    setPort(String(instance.port))
+    setLabel(instance.label ?? '')
+  }, [instance.host, instance.port, instance.label])
+
+  const commit = (): void => {
+    const trimmedHost = host.trim()
+    const parsedPort = parseInt(port, 10)
+    if (!trimmedHost) {
+      setHost(instance.host)
+      return
+    }
+    if (!Number.isFinite(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+      setPort(String(instance.port))
+      return
+    }
+    const nextLabel = label.trim() || undefined
+    if (
+      trimmedHost === instance.host &&
+      parsedPort === instance.port &&
+      nextLabel === instance.label
+    ) {
+      return
+    }
+    onCommit({ host: trimmedHost, port: parsedPort, label: nextLabel })
+  }
+
+  const revert = (): void => {
+    setHost(instance.host)
+    setPort(String(instance.port))
+    setLabel(instance.label ?? '')
+  }
+
+  return (
+    <tr style={{ borderTop: '1px solid var(--border)' }}>
+      <td style={{ padding: '4px 8px' }}>
+        <Input value={host} onChange={setHost} onCommit={commit} onRevert={revert} />
+      </td>
+      <td style={{ padding: '4px 8px', width: 80 }}>
+        <Input value={port} onChange={setPort} onCommit={commit} onRevert={revert} />
+      </td>
+      <td style={{ padding: '4px 8px' }}>
+        <Input value={label} onChange={setLabel} onCommit={commit} onRevert={revert} />
+      </td>
+      <td style={{ padding: '4px 8px', width: 24 }}>
+        <button
+          onClick={onRemove}
+          style={{ background: 'transparent', border: 'none', color: 'var(--fg-subtle)', cursor: 'pointer' }}
+          aria-label="Remove instance"
+        >
+          ✕
+        </button>
+      </td>
+    </tr>
+  )
+}
+
+function Input({
+  value,
+  onChange,
+  onCommit,
+  onRevert
+}: {
+  value: string
+  onChange: (v: string) => void
+  onCommit?: () => void
+  onRevert?: () => void
+}) {
   return (
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onBlur={() => onCommit?.()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          ;(e.target as HTMLInputElement).blur()
+        } else if (e.key === 'Escape') {
+          onRevert?.()
+          ;(e.target as HTMLInputElement).blur()
+        }
+      }}
       style={{
         width: '100%',
         background: 'transparent',

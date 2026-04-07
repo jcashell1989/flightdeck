@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Session, isAttention, ConnectionStatus } from '../types'
 
 interface TopBarProps {
@@ -5,11 +6,27 @@ interface TopBarProps {
   connectionStatus?: ConnectionStatus
 }
 
+// Grace period (ms) before showing the "connecting" banner on cold start.
+// Avoids a flash on every launch when hydrate completes within ~half a second.
+const CONNECTING_BANNER_GRACE_MS = 600
+
 export function TopBar({ sessions, connectionStatus = 'disabled' }: TopBarProps) {
   const attentionCount = sessions.filter((s) => isAttention(s.state)).length
   const runningCount = sessions.filter((s) => s.state === 'running').length
+
+  // Suppress the "connecting" banner during the initial grace window so the
+  // common case (mock-off, hydrate succeeds within a few hundred ms) doesn't
+  // flash a banner. Errors and reconnects are shown immediately.
+  const [graceElapsed, setGraceElapsed] = useState(false)
+  useEffect(() => {
+    const id = setTimeout(() => setGraceElapsed(true), CONNECTING_BANNER_GRACE_MS)
+    return () => clearTimeout(id)
+  }, [])
+
   const showConnectionBanner =
-    connectionStatus === 'reconnecting' || connectionStatus === 'error' || connectionStatus === 'connecting'
+    connectionStatus === 'reconnecting' ||
+    connectionStatus === 'error' ||
+    (connectionStatus === 'connecting' && graceElapsed)
 
   return (
     <header

@@ -99,7 +99,7 @@ export function SessionCard({ session, focused, onClick }: SessionCardProps) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 20 }}>
         <StatusDot state={session.state} />
         <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{session.agentType}</span>
-        <span className="mono" style={{ fontSize: 11, color: 'var(--fg-subtle)' }}>#{session.id}</span>
+        <span className="mono" style={{ fontSize: 11, color: 'var(--fg-subtle)' }} title={session.id}>#{session.id.slice(-4)}</span>
         <div style={{ flex: 1 }} />
         {attention && (
           <span style={{ fontSize: 11, color: leftBorder }}>⚠</span>

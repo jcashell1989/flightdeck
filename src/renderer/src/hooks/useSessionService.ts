@@ -14,8 +14,11 @@ export interface SessionServiceResult {
  * - If config.mock.enabled: returns the local fixture. No IPC.
  * - Otherwise: subscribes to main-process opencode snapshots via IPC.
  *
- * Slice 4: live branch is fully wired. The main-process registry hydrates
- * on start and pushes via `opencode:snapshot` whenever state mutates.
+ * Subscription order matters: we register the push listener BEFORE invoking
+ * getSnapshot() so a push that fires while the initial fetch is in flight
+ * cannot be overwritten by the older snapshot. We also track a monotonic
+ * sequence counter so a late-arriving initial fetch can never clobber a
+ * fresher push that has already been applied (B2 in code review).
  */
 export function useSessionService(config: AppConfig | null): SessionServiceResult {
   const useMock = config?.mock.enabled ?? true
@@ -34,22 +37,38 @@ export function useSessionService(config: AppConfig | null): SessionServiceResul
     }
 
     let disposed = false
-    const apply = (snap: {
-      projects: Project[]
-      aggregateStatus: {
-        status: ConnectionStatus
-        perInstance: Array<{ key: string; status: string; lastError: string | null }>
-      }
-    }): void => {
+    // Push events get sequence numbers starting at 1; the initial fetch is
+    // sequence 0 and is only applied if no push has landed yet.
+    let lastAppliedSeq = -1
+    let pushSeq = 0
+
+    const apply = (
+      snap: {
+        projects: Project[]
+        aggregateStatus: {
+          status: ConnectionStatus
+          perInstance: Array<{ key: string; status: string; lastError: string | null }>
+        }
+      },
+      seq: number
+    ): void => {
       if (disposed) return
+      if (seq < lastAppliedSeq) return
+      lastAppliedSeq = seq
       setLiveProjects(snap.projects)
       setLiveStatus(snap.aggregateStatus.status)
       const firstErr = snap.aggregateStatus.perInstance.find((i) => i.lastError)?.lastError
       setLiveError(firstErr ?? null)
     }
 
-    api.getSnapshot().then(apply)
-    const unsub = api.onSnapshot(apply)
+    // Subscribe FIRST so we don't miss events fired between the fetch and
+    // its resolution.
+    const unsub = api.onSnapshot((snap) => {
+      pushSeq += 1
+      apply(snap, pushSeq)
+    })
+    api.getSnapshot().then((snap) => apply(snap, 0))
+
     return () => {
       disposed = true
       unsub()

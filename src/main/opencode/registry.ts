@@ -57,11 +57,14 @@ export class OpencodeRegistry extends EventEmitter {
   private deriveAggregate(
     perInstance: AggregateStatus['perInstance']
   ): AggregateStatus['status'] {
+    // Worst-of-N precedence: error > reconnecting > connecting > connected.
+    // Errors must not be hidden by another instance that happens to be
+    // reconnecting (S2 in code review).
     if (perInstance.length === 0) return 'disabled'
-    if (perInstance.every((i) => i.status === 'connected')) return 'connected'
+    if (perInstance.some((i) => i.status === 'error')) return 'error'
     if (perInstance.some((i) => i.status === 'reconnecting')) return 'reconnecting'
     if (perInstance.some((i) => i.status === 'connecting')) return 'connecting'
-    return 'error'
+    return 'connected'
   }
 
   private handleConfigChange = (cfg: AppConfig): void => {

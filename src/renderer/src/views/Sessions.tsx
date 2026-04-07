@@ -56,7 +56,7 @@ export function Sessions({ projects, onSessionClick }: SessionsProps) {
                 <span style={{ color: `var(--status-${s.state})` }}>{STATUS_LABELS[s.state]}</span>
               </td>
               <td style={{ padding: '8px', color: 'var(--fg-muted)' }}>{s.agentType}</td>
-              <td className="mono" style={{ padding: '8px', color: 'var(--fg-subtle)' }}>#{s.id}</td>
+              <td className="mono" style={{ padding: '8px', color: 'var(--fg-subtle)' }} title={s.id}>#{s.id.slice(-4)}</td>
               <td style={{ padding: '8px', color: 'var(--fg-muted)' }}>{s.projectName}</td>
               <td className="mono" style={{ padding: '8px', color: 'var(--fg-primary)', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {s.currentAction}

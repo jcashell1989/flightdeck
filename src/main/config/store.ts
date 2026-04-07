@@ -52,6 +52,10 @@ class ConfigStore extends EventEmitter {
   }
 
   private merge(base: AppConfig, patch: Partial<AppConfig>): AppConfig {
+    // Shallow merge at the top level: callers must provide a complete object
+    // for any section they patch (e.g. `{ mock: { enabled: false } }` replaces
+    // the whole `mock` object). Acceptable today because each section is
+    // small; revisit if any section grows independently mutable fields.
     return {
       opencode: patch.opencode ?? base.opencode,
       mock: patch.mock ?? base.mock

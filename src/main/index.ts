@@ -1,8 +1,19 @@
 import { app, BrowserWindow, nativeTheme, ipcMain, webContents } from 'electron'
-import { join } from 'path'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import { is } from '@electron-toolkit/utils'
 import { configStore, AppConfig } from './config/store'
 import { opencodeRegistry } from './opencode/registry'
+
+// Main is bundled as ESM (electron.vite.config.ts: format 'es'), so __dirname
+// is not defined. Resolve it from import.meta.url instead.
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+function broadcast(channel: string, payload: unknown): void {
+  for (const wc of webContents.getAllWebContents()) {
+    if (!wc.isDestroyed()) wc.send(channel, payload)
+  }
+}
 
 ipcMain.handle('get-theme', () => {
   return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
@@ -13,17 +24,10 @@ ipcMain.handle('config:set', (_e, patch: Partial<AppConfig>) => configStore.set(
 
 ipcMain.handle('opencode:snapshot', () => opencodeRegistry.snapshot())
 
-configStore.on('change', (cfg: AppConfig) => {
-  for (const wc of webContents.getAllWebContents()) {
-    if (!wc.isDestroyed()) wc.send('config-changed', cfg)
-  }
-})
+configStore.on('change', (cfg: AppConfig) => broadcast('config-changed', cfg))
 
 opencodeRegistry.on('change', () => {
-  const snap = opencodeRegistry.snapshot()
-  for (const wc of webContents.getAllWebContents()) {
-    if (!wc.isDestroyed()) wc.send('opencode:snapshot', snap)
-  }
+  broadcast('opencode:snapshot', opencodeRegistry.snapshot())
 })
 
 function createWindow(): void {
