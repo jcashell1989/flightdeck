@@ -2,15 +2,6 @@ import { useState, useEffect } from 'react'
 
 type Theme = 'dark' | 'light'
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      getTheme: () => Promise<Theme>
-      onThemeChanged: (callback: (theme: Theme) => void) => () => void
-    }
-  }
-}
-
 export function useTheme(): Theme {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) {

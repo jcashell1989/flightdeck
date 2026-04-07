@@ -1,9 +1,19 @@
-import { app, BrowserWindow, nativeTheme, ipcMain } from 'electron'
+import { app, BrowserWindow, nativeTheme, ipcMain, webContents } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
+import { configStore, AppConfig } from './config/store'
 
 ipcMain.handle('get-theme', () => {
   return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
+})
+
+ipcMain.handle('config:get', () => configStore.get())
+ipcMain.handle('config:set', (_e, patch: Partial<AppConfig>) => configStore.set(patch))
+
+configStore.on('change', (cfg: AppConfig) => {
+  for (const wc of webContents.getAllWebContents()) {
+    if (!wc.isDestroyed()) wc.send('config-changed', cfg)
+  }
 })
 
 function createWindow(): void {
@@ -39,7 +49,10 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(createWindow)
+app.whenReady().then(async () => {
+  await configStore.init()
+  createWindow()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
