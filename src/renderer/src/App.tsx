@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Session, View } from './types'
+import { Session, View, isAttention } from './types'
 import { useTheme } from './hooks/useTheme'
 import { useKeyboardNav } from './hooks/useKeyboardNav'
 import { useConfig } from './hooks/useConfig'
@@ -24,7 +24,19 @@ export function App() {
   const [fullScreen, setFullScreen] = useState(false)
   const [cmdKOpen, setCmdKOpen] = useState(false)
 
-  const allSessions = useMemo(() => projects.flatMap((p) => p.sessions), [projects])
+  // J/K nav order must match the visual order users see. Both Dashboard and
+  // Sessions sort attention-first, then most recent activity. We mirror that
+  // here as a flat list so keyboard nav lines up across views.
+  const allSessions = useMemo(() => {
+    const flat = projects.flatMap((p) => p.sessions)
+    return [...flat].sort((a, b) => {
+      const aAtt = isAttention(a.state)
+      const bAtt = isAttention(b.state)
+      if (aAtt && !bAtt) return -1
+      if (!aAtt && bAtt) return 1
+      return b.lastActivity - a.lastActivity
+    })
+  }, [projects])
 
   const focusedSession = allSessions[focusIndex] ?? null
   const selectedSession = panelOpen ? focusedSession : null
