@@ -1,0 +1,74 @@
+@import './theme.css';
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  background: var(--bg-base);
+  color: var(--fg-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: "Berkeley Mono", "SF Mono", "Fira Code", monospace;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-active);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-subtle);
+}
+
+/* Pulse animation for attention dots */
+@keyframes status-pulse {
+  0%, 100% { transform: scale(1.0); opacity: 1.0; }
+  50%      { transform: scale(1.3); opacity: 0.8; }
+}
+
+.status-dot--pulsing {
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+/* App layout */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  min-width: 0;
+}

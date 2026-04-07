@@ -1,0 +1,28 @@
+{
+  "name": "agentctl",
+  "version": "0.1.0",
+  "description": "Multi-agent coding dashboard",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "electron": "^35.1.5",
+    "electron-vite": "^3.1.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.2"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^4.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}

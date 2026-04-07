@@ -1,0 +1,16 @@
+.todos/
+.sidecar/
+.sidecar-agent
+.sidecar-task
+.sidecar-pr
+.sidecar-start.sh
+.sidecar-base
+.td-root
+
+# Build
+node_modules/
+out/
+dist/
+
+# OS
+.DS_Store

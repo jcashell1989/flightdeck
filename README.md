@@ -5,7 +5,7 @@ multiple AI coding agents and project directories.
 
 ## Status
 
-**Design phase.** Spec complete, implementation not started.
+**Structure phase complete.** Ready for Phase 1 implementation.
 
 ## Agents in scope
 
@@ -21,6 +21,7 @@ multiple AI coding agents and project directories.
 - [`docs/spec-ux.md`](docs/spec-ux.md) — Full UX/UI specification
 - [`docs/spec-theme.md`](docs/spec-theme.md) — cleo-parchment theme specification
 - [`docs/research.md`](docs/research.md) — Tool evaluation and integration surface research
+- [`docs/structure.md`](docs/structure.md) — Build phases, decisions, and validation approach
 
 ## Key decisions
 
@@ -30,4 +31,4 @@ multiple AI coding agents and project directories.
 - **Dispatch:** ⌘K command-palette overlay, opencode only (Claude Code is monitor-only)
 - **Notifications:** In-app only, no OS interruptions
 - **Theme:** cleo-parchment, dark/light follows macOS appearance automatically
-- **Architecture:** TBD — options evaluated in `docs/research.md`
+- **Architecture:** Option C — standalone Electron + React app (see `docs/structure.md`)
