@@ -135,17 +135,26 @@ within each agent group; stack vertically on narrow viewports.
 
 ### Card State Variations
 
-| State | Dot | Left border | Background | Pulse |
-|---|---|---|---|---|
-| Running | green ● | none | default | no |
-| Idle | gray ○ | none | slightly darker | no |
-| Tool/permission approval | amber ● | 3px amber | amber tint | yes |
-| Clarifying question | blue ● | 3px blue | blue tint | yes |
-| Done — review changes | magenta ● | 3px magenta | magenta tint | no |
-| Error | red ● | 3px red | red tint | no |
+| State | Dot | Left border | Background | Pulse | Attention |
+|---|---|---|---|---|---|
+| Running | green ● | none | default | no | no |
+| Idle | gray ○ | **2px neutral** | default | no | **yes** |
+| Tool/permission approval | amber ● | 3px amber | amber tint | yes | yes |
+| Clarifying question | blue ● | 3px blue | blue tint | yes | yes |
+| Done — review changes | magenta ● | 3px magenta | magenta tint | no | (reserved) |
+| Error | red ● | 3px red | red tint | no | yes |
+
+**Attention semantics (Phase 2):** An agent that is **not actively working** is
+something the user generally wants to look at. Therefore the attention set is
+`{approval, question, error, idle}` — only `running` is "leave it alone."
+`review` is reserved for a Phase 3 signal (idle + uncommitted-diff + unseen
+watermark) and is never assigned in Phase 2. `idle` gets a thinner 2px neutral
+left border — visible enough to float to the top of sorts and show the ⚠ flag,
+quiet enough not to read as loudly as the 3px colored states.
 
 Pulse: status dot scales 1.0 → 1.3 → 1.0 on 2s ease-in-out loop.
-Only on approval and question states (actively blocking). Review is static.
+Only on approval and question states (actively blocking). Idle, error, and
+review are static.
 
 ---
 
@@ -388,14 +397,14 @@ See [`spec-theme.md`](spec-theme.md) for the full cleo-parchment color specifica
 
 ### Attention type visual matrix
 
-| State | Dot | Left border | Background | Pulse |
-|---|---|---|---|---|
-| Running | green ● | none | default | no |
-| Idle | gray ○ | none | slightly darker | no |
-| Tool approval | amber ● | 3px amber | amber/5% | yes |
-| Question | blue ● | 3px blue | blue/6% | yes |
-| Review changes | magenta ● | 3px magenta | magenta/5% | no |
-| Error | red ● | 3px red | red/6% | no |
+| State | Dot | Left border | Background | Pulse | Attention |
+|---|---|---|---|---|---|
+| Running | green ● | none | default | no | no |
+| Idle | gray ○ | 2px neutral | default | no | yes |
+| Tool approval | amber ● | 3px amber | amber/5% | yes | yes |
+| Question | blue ● | 3px blue | blue/6% | yes | yes |
+| Review changes | magenta ● | 3px magenta | magenta/5% | no | (reserved) |
+| Error | red ● | 3px red | red/6% | no | yes |
 
 ### Accent
 

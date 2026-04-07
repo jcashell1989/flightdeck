@@ -1,14 +1,15 @@
-import { Session } from '../types'
+import { Session, isAttention, ConnectionStatus } from '../types'
 
 interface TopBarProps {
   sessions: Session[]
+  connectionStatus?: ConnectionStatus
 }
 
-export function TopBar({ sessions }: TopBarProps) {
-  const attentionCount = sessions.filter(
-    (s) => s.state === 'approval' || s.state === 'question' || s.state === 'review'
-  ).length
+export function TopBar({ sessions, connectionStatus = 'disabled' }: TopBarProps) {
+  const attentionCount = sessions.filter((s) => isAttention(s.state)).length
   const runningCount = sessions.filter((s) => s.state === 'running').length
+  const showConnectionBanner =
+    connectionStatus === 'reconnecting' || connectionStatus === 'error' || connectionStatus === 'connecting'
 
   return (
     <header
@@ -41,6 +42,19 @@ export function TopBar({ sessions }: TopBarProps) {
 
       {/* @ts-expect-error Electron-specific CSS property */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, WebkitAppRegion: 'no-drag' }}>
+        {showConnectionBanner && (
+          <span
+            style={{
+              fontSize: 11,
+              color: connectionStatus === 'error' ? 'var(--status-error)' : 'var(--fg-muted)',
+              fontWeight: 500
+            }}
+          >
+            {connectionStatus === 'connecting' && '… connecting'}
+            {connectionStatus === 'reconnecting' && '… reconnecting'}
+            {connectionStatus === 'error' && '⚠ disconnected'}
+          </span>
+        )}
         {attentionCount > 0 && (
           <span
             style={{

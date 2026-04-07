@@ -1,4 +1,5 @@
-import { Project, Session } from '../types'
+import { useMemo } from 'react'
+import { Project, Session, isAttention } from '../types'
 import { ProjectGroup } from '../components/ProjectGroup'
 
 interface DashboardProps {
@@ -9,15 +10,17 @@ interface DashboardProps {
 
 export function Dashboard({ projects, focusedSessionId, onSessionClick }: DashboardProps) {
   // Sort: projects with attention-needed sessions float to top, then by most recent activity
-  const sorted = [...projects].sort((a, b) => {
-    const aAttention = a.sessions.some((s) => s.state === 'approval' || s.state === 'question' || s.state === 'review')
-    const bAttention = b.sessions.some((s) => s.state === 'approval' || s.state === 'question' || s.state === 'review')
-    if (aAttention && !bAttention) return -1
-    if (!aAttention && bAttention) return 1
-    const aRecent = Math.max(...a.sessions.map((s) => s.lastActivity))
-    const bRecent = Math.max(...b.sessions.map((s) => s.lastActivity))
-    return bRecent - aRecent
-  })
+  const sorted = useMemo(() => {
+    return [...projects].sort((a, b) => {
+      const aAttention = a.sessions.some((s) => isAttention(s.state))
+      const bAttention = b.sessions.some((s) => isAttention(s.state))
+      if (aAttention && !bAttention) return -1
+      if (!aAttention && bAttention) return 1
+      const aRecent = Math.max(...a.sessions.map((s) => s.lastActivity))
+      const bRecent = Math.max(...b.sessions.map((s) => s.lastActivity))
+      return bRecent - aRecent
+    })
+  }, [projects])
 
   return (
     <div>

@@ -1,4 +1,5 @@
-import { Project, Session, SessionState } from '../types'
+import { useMemo } from 'react'
+import { Project, Session, SessionState, isAttention } from '../types'
 import { StatusDot } from '../components/StatusDot'
 
 interface SessionsProps {
@@ -16,18 +17,19 @@ const STATUS_LABELS: Record<SessionState, string> = {
 }
 
 export function Sessions({ projects, onSessionClick }: SessionsProps) {
-  const allSessions = projects.flatMap((p) =>
-    p.sessions.map((s) => ({ ...s, projectName: p.name }))
-  )
-
-  // Attention first, then by last activity
-  allSessions.sort((a, b) => {
-    const aAtt = ['approval', 'question', 'review'].includes(a.state)
-    const bAtt = ['approval', 'question', 'review'].includes(b.state)
-    if (aAtt && !bAtt) return -1
-    if (!aAtt && bAtt) return 1
-    return b.lastActivity - a.lastActivity
-  })
+  const allSessions = useMemo(() => {
+    const flat = projects.flatMap((p) =>
+      p.sessions.map((s) => ({ ...s, projectName: p.name }))
+    )
+    flat.sort((a, b) => {
+      const aAtt = isAttention(a.state)
+      const bAtt = isAttention(b.state)
+      if (aAtt && !bAtt) return -1
+      if (!aAtt && bAtt) return 1
+      return b.lastActivity - a.lastActivity
+    })
+    return flat
+  }, [projects])
 
   return (
     <div>

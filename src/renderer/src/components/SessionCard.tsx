@@ -1,5 +1,6 @@
-import { Session, SessionState } from '../types'
+import { Session, SessionState, isAttention } from '../types'
 import { StatusDot } from './StatusDot'
+import { useElapsedTick } from '../hooks/useElapsedTick'
 
 interface SessionCardProps {
   session: Session
@@ -18,14 +19,12 @@ const STATUS_LABELS: Record<SessionState, string> = {
 
 const ACTION_ICONS: Record<SessionState, string> = {
   running: '✎',
-  idle: '✓',
+  idle: '◌',
   approval: '⏸',
   question: '⏸',
   review: '✓',
   error: '✗'
 }
-
-const ATTENTION_STATES: Set<SessionState> = new Set(['approval', 'question', 'review', 'error'])
 
 function borderStyle(state: SessionState): string | undefined {
   switch (state) {
@@ -33,6 +32,7 @@ function borderStyle(state: SessionState): string | undefined {
     case 'question': return 'var(--border-question)'
     case 'review':   return 'var(--border-review)'
     case 'error':    return 'var(--border-error)'
+    case 'idle':     return 'var(--fg-subtle)'
     default: return undefined
   }
 }
@@ -56,17 +56,21 @@ function formatElapsed(ms: number): string {
   return `${hr}h ${min % 60}m`
 }
 
-function formatRelative(ts: number): string {
-  const diff = Math.floor((Date.now() - ts) / 1000)
+function formatRelative(ts: number, now: number): string {
+  const diff = Math.floor((now - ts) / 1000)
   if (diff < 60) return 'just now'
   if (diff < 3600) return `${Math.floor(diff / 60)} min ago`
   return `${Math.floor(diff / 3600)}h ago`
 }
 
 export function SessionCard({ session, focused, onClick }: SessionCardProps) {
+  const now = useElapsedTick()
   const leftBorder = borderStyle(session.state)
   const tint = tintStyle(session.state)
-  const isAttention = ATTENTION_STATES.has(session.state)
+  const attention = isAttention(session.state)
+  // `idle` gets a thinner border than the loud attention states.
+  const borderWidth = session.state === 'idle' ? 2 : 3
+  const elapsedMs = now - session.startedAt
 
   return (
     <div
@@ -78,7 +82,11 @@ export function SessionCard({ session, focused, onClick }: SessionCardProps) {
         padding: '10px 12px',
         borderRadius: 6,
         border: focused ? '1px solid var(--accent)' : '1px solid var(--border)',
-        borderLeft: leftBorder ? `3px solid ${leftBorder}` : focused ? '1px solid var(--accent)' : '1px solid var(--border)',
+        borderLeft: leftBorder
+          ? `${borderWidth}px solid ${leftBorder}`
+          : focused
+            ? '1px solid var(--accent)'
+            : '1px solid var(--border)',
         backgroundColor: tint ?? 'var(--bg-panel)',
         cursor: 'pointer',
         display: 'flex',
@@ -93,7 +101,7 @@ export function SessionCard({ session, focused, onClick }: SessionCardProps) {
         <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{session.agentType}</span>
         <span className="mono" style={{ fontSize: 11, color: 'var(--fg-subtle)' }}>#{session.id}</span>
         <div style={{ flex: 1 }} />
-        {isAttention && (
+        {attention && (
           <span style={{ fontSize: 11, color: leftBorder }}>⚠</span>
         )}
       </div>
@@ -103,7 +111,7 @@ export function SessionCard({ session, focused, onClick }: SessionCardProps) {
         className="mono"
         style={{
           fontSize: 12,
-          color: session.state === 'idle' ? 'var(--fg-subtle)' : 'var(--fg-primary)',
+          color: session.state === 'idle' ? 'var(--fg-muted)' : 'var(--fg-primary)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap'
@@ -118,11 +126,11 @@ export function SessionCard({ session, focused, onClick }: SessionCardProps) {
           {STATUS_LABELS[session.state]}
         </span>
         <span className="mono" style={{ color: 'var(--fg-subtle)' }}>
-          {formatElapsed(session.elapsedMs)}
+          {formatElapsed(elapsedMs)}
         </span>
         <div style={{ flex: 1 }} />
         <span style={{ color: 'var(--fg-subtle)' }}>
-          {formatRelative(session.lastActivity)}
+          {formatRelative(session.lastActivity, now)}
         </span>
       </div>
     </div>

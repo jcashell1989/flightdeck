@@ -1,8 +1,9 @@
 import { useState, useCallback, useMemo } from 'react'
 import { View, Session } from './types'
-import { mockProjects } from './mockData'
 import { useTheme } from './hooks/useTheme'
 import { useKeyboardNav } from './hooks/useKeyboardNav'
+import { useConfig } from './hooks/useConfig'
+import { useSessionService } from './hooks/useSessionService'
 import { TopBar } from './components/TopBar'
 import { NavRail } from './components/NavRail'
 import { ContextPanel } from './components/ContextPanel'
@@ -13,14 +14,15 @@ import { Settings } from './views/Settings'
 
 export function App() {
   useTheme()
+  const { config, setConfig } = useConfig()
+  const { projects, connectionStatus } = useSessionService(config)
 
   const [activeView, setActiveView] = useState<View>('dashboard')
   const [focusIndex, setFocusIndex] = useState(0)
   const [panelOpen, setPanelOpen] = useState(false)
 
-  const allSessions = useMemo(() => mockProjects.flatMap((p) => p.sessions), [])
+  const allSessions = useMemo(() => projects.flatMap((p) => p.sessions), [projects])
 
-  // Single source of truth: focusIndex drives both highlighted card and panel content
   const focusedSession = allSessions[focusIndex] ?? null
   const selectedSession = panelOpen ? focusedSession : null
 
@@ -58,22 +60,22 @@ export function App() {
 
   return (
     <div className="app-layout">
-      <TopBar sessions={allSessions} />
+      <TopBar sessions={allSessions} connectionStatus={connectionStatus} />
       <div className="app-body">
         <NavRail activeView={activeView} onViewChange={handleViewChange} />
         <div className="main-content">
           {activeView === 'dashboard' && (
             <Dashboard
-              projects={mockProjects}
+              projects={projects}
               focusedSessionId={focusedSessionId}
               onSessionClick={handleSessionClick}
             />
           )}
           {activeView === 'sessions' && (
-            <Sessions projects={mockProjects} onSessionClick={handleSessionClick} />
+            <Sessions projects={projects} onSessionClick={handleSessionClick} />
           )}
-          {activeView === 'projects' && <Projects projects={mockProjects} />}
-          {activeView === 'settings' && <Settings />}
+          {activeView === 'projects' && <Projects projects={projects} />}
+          {activeView === 'settings' && <Settings config={config} setConfig={setConfig} />}
         </div>
         <ContextPanel session={selectedSession} onClose={handleClosePanel} />
       </div>

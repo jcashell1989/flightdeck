@@ -15,7 +15,6 @@ export const mockProjects: Project[] = [
         currentAction: 'editing src/middleware/auth.ts',
         startedAt: now - 134_000,
         lastActivity: now - 12_000,
-        elapsedMs: 134_000,
         projectId: 'auth-service'
       },
       {
@@ -25,7 +24,6 @@ export const mockProjects: Project[] = [
         currentAction: 'waiting: approve shell command `npm test`',
         startedAt: now - 300_000,
         lastActivity: now - 45_000,
-        elapsedMs: 300_000,
         projectId: 'auth-service'
       },
       {
@@ -35,7 +33,6 @@ export const mockProjects: Project[] = [
         currentAction: 'asking: which auth provider to use?',
         startedAt: now - 180_000,
         lastActivity: now - 60_000,
-        elapsedMs: 180_000,
         projectId: 'auth-service'
       }
     ]
@@ -48,11 +45,10 @@ export const mockProjects: Project[] = [
       {
         id: '2d5f',
         agentType: 'opencode',
-        state: 'review',
-        currentAction: 'done — 14 files changed',
+        state: 'idle',
+        currentAction: 'idle — last action: ran tests',
         startedAt: now - 600_000,
         lastActivity: now - 120_000,
-        elapsedMs: 480_000,
         projectId: 'api-gateway'
       },
       {
@@ -62,7 +58,6 @@ export const mockProjects: Project[] = [
         currentAction: 'failed: npm run build exited with code 1',
         startedAt: now - 900_000,
         lastActivity: now - 800_000,
-        elapsedMs: 100_000,
         projectId: 'api-gateway'
       }
     ]
@@ -76,10 +71,9 @@ export const mockProjects: Project[] = [
         id: 'f3a1',
         agentType: 'claude-code',
         state: 'idle',
-        currentAction: 'completed: refactored login component',
+        currentAction: 'idle — completed: refactored login component',
         startedAt: now - 1_200_000,
         lastActivity: now - 1_100_000,
-        elapsedMs: 100_000,
         projectId: 'frontend-app'
       }
     ]
