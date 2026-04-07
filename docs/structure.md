@@ -48,20 +48,26 @@
 
 **Goal:** Dashboard shows real session state from running opencode instances. Cards update in real time.
 
-**Scope:**
-- Service layer: connect to N `opencode serve` instances (manual port config initially, mDNS discovery stretch goal)
-- SSE event stream subscription per instance
-- Session state mapping: opencode status -> 6 card states
-- Attention detection (tool approval, clarifying questions, completion)
-- Elapsed timers (live counting for running sessions)
-- Project grouping from real data, sort by recency, attention-needed float-to-top
-- Error handling: instance down, reconnection, stale state cleanup
+**Shipped:**
+- `ConfigStore` at `userData/config.json` with main-process IPC + renderer `useConfig()`. Single source of truth for opencode instances + mock toggle.
+- `OpencodeInstanceClient` wrapping `@opencode-ai/sdk@1.3.17`: hydrates via `session.list()` + `session.status()`, subscribes to `${baseUrl}/event` via the `eventsource` package, applies events through a pure mapper. Exponential backoff reconnect (1/2/4/8/16/30s cap).
+- `OpencodeRegistry` (N clients keyed by host:port). Syncs with config — add/remove/rebuild on change. Aggregates per-instance snapshots into a single `{ projects, aggregateStatus }` payload. Mock-mode toggles tear down live connections.
+- IPC bridge: `opencode:snapshot` (request + push) via `window.electronAPI.opencode.{getSnapshot, onSnapshot}`.
+- `useSessionService()`: mock branch (config.mock.enabled) vs live IPC branch, single hook.
+- Dashboard / Sessions / ProjectGroup render from the hook. Sort memoized (a0a588 HIGH-2/3), `elapsedMs` derived via `useElapsedTick` (a0a588 LOW-5 + MEDIUM-4), `allSessions` deps fixed (MEDIUM-5).
+- **Attention semantics change:** `idle` is now an attention state — an agent with no reason to be idle is a problem. Attention set is `{approval, question, error, idle}`. See `spec-ux.md §2`.
+- Connection banner in TopBar renders `connecting` / `reconnecting` / `error`.
+- Settings UI: mock toggle + opencode instances CRUD (host/port/label).
 
-**Validation:**
-- Connect to a running `opencode serve` instance
-- Dispatch a task (via opencode CLI), see card go running -> done
-- SSE stream reconnects after network interruption
-- Multiple instances on different ports aggregate correctly
+**Scope changes from the original plan:**
+- `question` state is **never assigned from opencode events** — SDK 1.3.17 exposes no `question.*` events, only `permission.updated` / `permission.replied` and `session.status/idle/error`. The `question` state slot stays in the type enum for the Claude Code monitor (`td-4a41eb`) and a possible future SDK version.
+- `review` state is **reserved for Phase 3** — requires an idle + uncommitted-diff + unseen-watermark signal that needs the diff view to exist. Phase 2 never assigns `review`.
+- mDNS discovery, HTTP basic auth (`OPENCODE_SERVER_PASSWORD`), and remote daemon mode remain out of scope.
+- `td-a0a588` MEDIUM-8 (J/K nav order mismatch) stays on that ticket as a focused follow-up — orthogonal to live data.
+
+**Validation status:**
+- ✅ `npm run typecheck` clean.
+- ⏳ End-to-end smoke test against a real `opencode serve` instance is a manual step that must run in a different session (per the td protocol — no self-review). The reviewer should: (1) start `opencode serve`, (2) flip `config.mock.enabled` off via Settings, (3) dispatch a task via `opencode` CLI, (4) confirm state transitions render live, (5) kill the server and confirm the reconnect banner appears, (6) restart and confirm hydration.
 
 ---
 
