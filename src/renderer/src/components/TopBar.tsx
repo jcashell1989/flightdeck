@@ -4,13 +4,14 @@ import { Session, isAttention, ConnectionStatus } from '../types'
 interface TopBarProps {
   sessions: Session[]
   connectionStatus?: ConnectionStatus
+  onCmdKClick?: () => void
 }
 
 // Grace period (ms) before showing the "connecting" banner on cold start.
 // Avoids a flash on every launch when hydrate completes within ~half a second.
 const CONNECTING_BANNER_GRACE_MS = 600
 
-export function TopBar({ sessions, connectionStatus = 'disabled' }: TopBarProps) {
+export function TopBar({ sessions, connectionStatus = 'disabled', onCmdKClick }: TopBarProps) {
   const attentionCount = sessions.filter((s) => isAttention(s.state)).length
   const runningCount = sessions.filter((s) => s.state === 'running').length
 
@@ -87,7 +88,9 @@ export function TopBar({ sessions, connectionStatus = 'disabled' }: TopBarProps)
           </span>
         )}
 
-        <span
+        <button
+          type="button"
+          onClick={onCmdKClick}
           className="mono"
           style={{
             fontSize: 12,
@@ -95,11 +98,12 @@ export function TopBar({ sessions, connectionStatus = 'disabled' }: TopBarProps)
             borderRadius: 4,
             border: '1px solid var(--border)',
             color: 'var(--fg-muted)',
+            backgroundColor: 'transparent',
             cursor: 'pointer'
           }}
         >
           ⌘K Dispatch
-        </span>
+        </button>
 
         {runningCount > 0 && (
           <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--fg-muted)' }}>

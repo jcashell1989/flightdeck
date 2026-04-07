@@ -1,6 +1,7 @@
 import { app, BrowserWindow, nativeTheme, ipcMain, webContents } from 'electron'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { execFile } from 'child_process'
 import { is } from '@electron-toolkit/utils'
 import { configStore, AppConfig } from './config/store'
 import { opencodeRegistry } from './opencode/registry'
@@ -23,6 +24,91 @@ ipcMain.handle('config:get', () => configStore.get())
 ipcMain.handle('config:set', (_e, patch: Partial<AppConfig>) => configStore.set(patch))
 
 ipcMain.handle('opencode:snapshot', () => opencodeRegistry.snapshot())
+
+ipcMain.handle('opencode:session:messages', async (_e, sessionId: string) => {
+  const client = opencodeRegistry.findClientForSession(sessionId)
+  if (!client) throw new Error(`no client owns session ${sessionId}`)
+  return client.fetchMessages(sessionId)
+})
+
+ipcMain.handle(
+  'opencode:session:prompt',
+  async (_e, sessionId: string, text: string) => {
+    const client = opencodeRegistry.findClientForSession(sessionId)
+    if (!client) throw new Error(`no client owns session ${sessionId}`)
+    await client.sendPrompt(sessionId, text)
+    return { ok: true }
+  }
+)
+
+ipcMain.handle(
+  'opencode:session:respond',
+  async (
+    _e,
+    sessionId: string,
+    permissionId: string,
+    response: 'once' | 'always' | 'reject'
+  ) => {
+    const client = opencodeRegistry.findClientForSession(sessionId)
+    if (!client) throw new Error(`no client owns session ${sessionId}`)
+    await client.respondPermission(sessionId, permissionId, response)
+    return { ok: true }
+  }
+)
+
+ipcMain.handle('opencode:session:abort', async (_e, sessionId: string) => {
+  const client = opencodeRegistry.findClientForSession(sessionId)
+  if (!client) throw new Error(`no client owns session ${sessionId}`)
+  await client.abortSession(sessionId)
+  return { ok: true }
+})
+
+ipcMain.handle(
+  'opencode:session:create',
+  async (
+    _e,
+    args: { instanceKey?: string; directory: string; prompt: string; title?: string }
+  ) => {
+    const client = args.instanceKey
+      ? opencodeRegistry.findClientByKey(args.instanceKey)
+      : opencodeRegistry.firstClient()
+    if (!client) throw new Error('no opencode client available')
+    const id = await client.createSession(args.directory, args.title)
+    await client.sendPrompt(id, args.prompt)
+    return { sessionId: id }
+  }
+)
+
+function runCmd(
+  cmd: string,
+  args: string[],
+  cwd: string
+): Promise<{ stdout: string; stderr: string; code: number }> {
+  return new Promise((resolve) => {
+    execFile(
+      cmd,
+      args,
+      { cwd, maxBuffer: 10 * 1024 * 1024 },
+      (err, stdout, stderr) => {
+        resolve({
+          stdout: stdout?.toString() ?? '',
+          stderr: stderr?.toString() ?? '',
+          code: err ? (err as NodeJS.ErrnoException & { code?: number }).code ?? 1 : 0
+        })
+      }
+    )
+  })
+}
+
+ipcMain.handle('opencode:diff', async (_e, path: string) => {
+  if (!path) return { stdout: '', stderr: 'no path', code: 1 }
+  return runCmd('git', ['-C', path, 'diff', '--no-color'], path)
+})
+
+ipcMain.handle('opencode:todo', async (_e, path: string) => {
+  if (!path) return { stdout: '', stderr: 'no path', code: 1 }
+  return runCmd('td', ['usage', '-q', '-w', path], path)
+})
 
 configStore.on('change', (cfg: AppConfig) => broadcast('config-changed', cfg))
 

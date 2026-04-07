@@ -117,6 +117,72 @@ export class OpencodeInstanceClient extends EventEmitter {
     }
   }
 
+  hasSession(sessionId: string): boolean {
+    return this.sessions.has(sessionId)
+  }
+
+  getDirectory(sessionId: string): string | undefined {
+    return this.sessions.get(sessionId)?.meta.directory
+  }
+
+  async fetchMessages(
+    sessionId: string
+  ): Promise<Array<{ info: unknown; parts: unknown[] }>> {
+    const res = await this.sdk.session.messages({ path: { id: sessionId } })
+    return (res.data ?? []) as Array<{ info: unknown; parts: unknown[] }>
+  }
+
+  async sendPrompt(sessionId: string, text: string): Promise<void> {
+    const dir = this.getDirectory(sessionId)
+    await this.sdk.session.prompt({
+      path: { id: sessionId },
+      query: dir ? { directory: dir } : undefined,
+      body: {
+        parts: [{ type: 'text', text }]
+      }
+    })
+  }
+
+  async respondPermission(
+    sessionId: string,
+    permissionId: string,
+    response: 'once' | 'always' | 'reject'
+  ): Promise<void> {
+    const dir = this.getDirectory(sessionId)
+    await this.sdk.postSessionIdPermissionsPermissionId({
+      path: { id: sessionId, permissionID: permissionId },
+      query: dir ? { directory: dir } : undefined,
+      body: { response }
+    })
+  }
+
+  async abortSession(sessionId: string): Promise<void> {
+    const dir = this.getDirectory(sessionId)
+    // SDK exposes session.abort in 1.3.17
+    const anySdk = this.sdk.session as unknown as {
+      abort?: (opts: {
+        path: { id: string }
+        query?: { directory?: string }
+      }) => Promise<unknown>
+    }
+    if (typeof anySdk.abort === 'function') {
+      await anySdk.abort({
+        path: { id: sessionId },
+        query: dir ? { directory: dir } : undefined
+      })
+    }
+  }
+
+  async createSession(directory: string, title?: string): Promise<string> {
+    const res = await this.sdk.session.create({
+      query: { directory },
+      body: title ? { title } : undefined
+    })
+    const data = res.data as { id?: string } | undefined
+    if (!data?.id) throw new Error('opencode create returned no id')
+    return data.id
+  }
+
   private async hydrate(): Promise<void> {
     const listRes = await this.sdk.session.list()
     const list = listRes.data ?? []

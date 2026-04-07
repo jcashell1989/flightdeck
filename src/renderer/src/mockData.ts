@@ -1,4 +1,58 @@
 import { Project } from './types'
+import type { MessageRecord } from './electronAPI'
+
+/**
+ * Fixture message history for mock mode — keyed loosely by sessionId so each
+ * card's drill-down renders something distinct. Used by useSessionDetail.
+ */
+export function mockMessages(sessionId: string): MessageRecord[] {
+  const baseTime = Date.now() - 300_000
+  return [
+    {
+      info: { id: `${sessionId}-m1`, role: 'user', time: { created: baseTime } },
+      parts: [
+        {
+          id: `${sessionId}-m1-p1`,
+          type: 'text',
+          text: 'Refactor the auth middleware to use the new JWT library.'
+        }
+      ]
+    },
+    {
+      info: { id: `${sessionId}-m2`, role: 'assistant', time: { created: baseTime + 20_000 } },
+      parts: [
+        {
+          id: `${sessionId}-m2-p1`,
+          type: 'text',
+          text: "I'll start by reading the current implementation."
+        },
+        {
+          id: `${sessionId}-m2-p2`,
+          type: 'tool',
+          tool: 'read',
+          state: { status: 'completed', output: 'src/middleware/auth.ts — 142 lines' }
+        }
+      ]
+    },
+    {
+      info: { id: `${sessionId}-m3`, role: 'assistant', time: { created: baseTime + 60_000 } },
+      parts: [
+        {
+          id: `${sessionId}-m3-p1`,
+          type: 'text',
+          text: 'The current implementation uses a custom hand-rolled verifier. Switching to jose now.'
+        },
+        {
+          id: `${sessionId}-m3-p2`,
+          type: 'tool',
+          tool: 'edit',
+          state: { status: 'completed', output: 'Modified src/middleware/auth.ts' }
+        }
+      ]
+    }
+  ]
+}
+
 
 const now = Date.now()
 

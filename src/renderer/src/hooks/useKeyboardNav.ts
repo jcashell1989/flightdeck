@@ -7,6 +7,8 @@ interface UseKeyboardNavOptions {
   onFocusPrev: () => void
   onEscape: () => void
   onEnter: () => void
+  onToggleFullScreen: () => void
+  onOpenCmdK: () => void
 }
 
 const VIEW_KEYS: Record<string, View> = {
@@ -22,11 +24,26 @@ export function useKeyboardNav(opts: UseKeyboardNavOptions): void {
 
   useEffect(() => {
     function handler(e: KeyboardEvent): void {
-      // Don't capture when typing in an input
       const tag = (e.target as HTMLElement).tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-
+      const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
       const o = optsRef.current
+
+      // Cmd+K / Ctrl+K is global — works even while typing.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault()
+        o.onOpenCmdK()
+        return
+      }
+
+      // Escape is global too (close modal/panel).
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        o.onEscape()
+        return
+      }
+
+      // Everything else: ignore while typing.
+      if (inInput) return
 
       const view = VIEW_KEYS[e.key]
       if (view) {
@@ -46,9 +63,10 @@ export function useKeyboardNav(opts: UseKeyboardNavOptions): void {
           e.preventDefault()
           o.onFocusPrev()
           break
-        case 'Escape':
+        case 'f':
+        case 'F':
           e.preventDefault()
-          o.onEscape()
+          o.onToggleFullScreen()
           break
         case 'Enter':
           o.onEnter()

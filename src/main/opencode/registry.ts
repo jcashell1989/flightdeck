@@ -37,6 +37,29 @@ export class OpencodeRegistry extends EventEmitter {
     this.removeAllListeners()
   }
 
+  /** Find the client that owns a given sessionId (linear scan — N is small). */
+  findClientForSession(sessionId: string): OpencodeInstanceClient | null {
+    for (const c of this.clients.values()) {
+      if (c.hasSession(sessionId)) return c
+    }
+    return null
+  }
+
+  /** Find a client by its host:port key. */
+  findClientByKey(key: string): OpencodeInstanceClient | null {
+    return this.clients.get(key) ?? null
+  }
+
+  /** First client (used as a default target when no instanceKey is supplied). */
+  firstClient(): OpencodeInstanceClient | null {
+    const iter = this.clients.values().next()
+    return iter.done ? null : iter.value
+  }
+
+  listClients(): Array<{ key: string; client: OpencodeInstanceClient }> {
+    return Array.from(this.clients.entries()).map(([key, client]) => ({ key, client }))
+  }
+
   snapshot(): { projects: NormalizedProject[]; aggregateStatus: AggregateStatus } {
     const projects: NormalizedProject[] = []
     const perInstance: AggregateStatus['perInstance'] = []

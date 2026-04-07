@@ -1,0 +1,309 @@
+import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AppConfig, Project } from '../types'
+
+interface CmdKDispatchProps {
+  open: boolean
+  projects: Project[]
+  config: AppConfig | null
+  onClose: () => void
+  onDispatched: (sessionId: string) => void
+}
+
+interface HistoryEntry {
+  prompt: string
+  projectPath: string
+  projectName: string
+  ts: number
+}
+
+const HISTORY_KEY = 'agentctl.dispatchHistory'
+const HISTORY_MAX = 20
+
+function loadHistory(): HistoryEntry[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as HistoryEntry[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function saveHistory(entries: HistoryEntry[]): void {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(entries.slice(0, HISTORY_MAX)))
+  } catch {
+    // ignore — localStorage may be disabled
+  }
+}
+
+export function CmdKDispatch({
+  open,
+  projects,
+  config,
+  onClose,
+  onDispatched
+}: CmdKDispatchProps) {
+  const [prompt, setPrompt] = useState('')
+  const [targetPath, setTargetPath] = useState<string>('')
+  const [history, setHistory] = useState<HistoryEntry[]>(loadHistory)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const useMock = config?.mock.enabled ?? true
+
+  const target = useMemo(
+    () => projects.find((p) => p.path === targetPath) ?? projects[0] ?? null,
+    [targetPath, projects]
+  )
+
+  // Default target + focus on open.
+  useEffect(() => {
+    if (!open) return
+    if (!targetPath && projects.length > 0) setTargetPath(projects[0].path)
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }, [open, projects, targetPath])
+
+  // Clear state when closed.
+  useEffect(() => {
+    if (!open) {
+      setPrompt('')
+      setError(null)
+      setBusy(false)
+    }
+  }, [open])
+
+  const dispatch = useCallback(async () => {
+    const text = prompt.trim()
+    if (!text || busy) return
+    if (!target) {
+      setError('no project selected')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      if (useMock) {
+        console.warn('[cmdk] mock mode — dispatch is a no-op', { target: target.path, text })
+      } else {
+        const api = window.electronAPI?.opencode
+        if (!api) throw new Error('bridge unavailable')
+        const instanceKey = target.sessions[0]?.instanceKey
+        const res = await api.createSession({
+          instanceKey,
+          directory: target.path,
+          prompt: text,
+          title: text.slice(0, 60)
+        })
+        onDispatched(res.sessionId)
+      }
+      const entry: HistoryEntry = {
+        prompt: text,
+        projectPath: target.path,
+        projectName: target.name,
+        ts: Date.now()
+      }
+      const next = [entry, ...history.filter((h) => h.prompt !== text)].slice(0, HISTORY_MAX)
+      setHistory(next)
+      saveHistory(next)
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }, [prompt, busy, target, useMock, history, onClose, onDispatched])
+
+  if (!open) return null
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        paddingTop: 120,
+        zIndex: 1000
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 640,
+          maxWidth: '90%',
+          backgroundColor: 'var(--bg-panel)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+          padding: 16,
+          fontSize: 12,
+          color: 'var(--fg-primary)'
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 12,
+            color: 'var(--fg-muted)'
+          }}
+        >
+          <span className="mono" style={{ fontWeight: 600 }}>⌘ Dispatch</span>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              color: 'var(--fg-subtle)',
+              fontSize: 10,
+              padding: '2px 6px',
+              cursor: 'pointer'
+            }}
+          >
+            Esc
+          </button>
+        </div>
+
+        <textarea
+          ref={textareaRef}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              e.preventDefault()
+              void dispatch()
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              onClose()
+            }
+          }}
+          placeholder="What should the agent do?"
+          rows={3}
+          style={{
+            width: '100%',
+            padding: '10px 12px',
+            fontSize: 13,
+            fontFamily: '"Berkeley Mono", "SF Mono", monospace',
+            border: '1px solid var(--border)',
+            borderRadius: 6,
+            backgroundColor: 'var(--bg-base)',
+            color: 'var(--fg-primary)',
+            outline: 'none',
+            resize: 'vertical',
+            marginBottom: 10
+          }}
+        />
+
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 11 }}
+        >
+          <span style={{ color: 'var(--fg-subtle)' }}>Target:</span>
+          <select
+            value={target?.path ?? ''}
+            onChange={(e) => setTargetPath(e.target.value)}
+            style={selectStyle}
+          >
+            {projects.length === 0 && <option value="">(no projects)</option>}
+            {projects.map((p) => (
+              <option key={p.path} value={p.path}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <span style={{ color: 'var(--fg-subtle)' }}>· opencode · New session</span>
+        </div>
+
+        {error && (
+          <div style={{ color: 'var(--status-error)', fontSize: 11, marginBottom: 8 }}>{error}</div>
+        )}
+        {useMock && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 10, marginBottom: 8 }}>
+            mock mode — dispatch is a no-op
+          </div>
+        )}
+
+        <div
+          style={{
+            borderTop: '1px solid var(--border)',
+            paddingTop: 10,
+            marginTop: 4,
+            fontSize: 11
+          }}
+        >
+          <div style={{ color: 'var(--fg-subtle)', marginBottom: 6 }}>Recent dispatches</div>
+          {history.length === 0 && (
+            <div style={{ color: 'var(--fg-subtle)', fontSize: 10 }}>(none yet)</div>
+          )}
+          {history.slice(0, 5).map((h) => (
+            <button
+              key={`${h.ts}-${h.prompt}`}
+              onClick={() => {
+                setPrompt(h.prompt)
+                setTargetPath(h.projectPath)
+                textareaRef.current?.focus()
+              }}
+              style={{
+                display: 'flex',
+                width: '100%',
+                textAlign: 'left',
+                gap: 8,
+                padding: '4px 0',
+                background: 'none',
+                border: 'none',
+                color: 'var(--fg-muted)',
+                cursor: 'pointer',
+                fontSize: 11
+              }}
+            >
+              <span style={{ color: 'var(--fg-subtle)' }}>↑</span>
+              <span
+                className="mono"
+                style={{
+                  flex: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {h.prompt}
+              </span>
+              <span style={{ color: 'var(--fg-subtle)' }}>{h.projectName}</span>
+            </button>
+          ))}
+        </div>
+
+        <div
+          style={{
+            marginTop: 12,
+            paddingTop: 10,
+            borderTop: '1px solid var(--border)',
+            fontSize: 10,
+            color: 'var(--fg-subtle)'
+          }}
+        >
+          ⌘↵ Send · Esc dismiss {busy && '· dispatching…'}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const selectStyle: CSSProperties = {
+  fontSize: 11,
+  padding: '3px 6px',
+  backgroundColor: 'var(--bg-base)',
+  color: 'var(--fg-primary)',
+  border: '1px solid var(--border)',
+  borderRadius: 4,
+  cursor: 'pointer'
+}

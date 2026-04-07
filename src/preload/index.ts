@@ -11,6 +11,15 @@ export interface AppConfig {
   mock: { enabled: boolean }
 }
 
+export interface PendingPermissionPayload {
+  id: string
+  type: string
+  title?: string
+  pattern?: string
+  command?: string
+  metadata: Record<string, unknown>
+}
+
 export interface OpencodeSnapshotPayload {
   projects: Array<{
     id: string
@@ -24,6 +33,8 @@ export interface OpencodeSnapshotPayload {
       startedAt: number
       lastActivity: number
       projectId: string
+      instanceKey: string
+      pendingPermission?: PendingPermissionPayload | null
     }>
   }>
   aggregateStatus: {
@@ -34,6 +45,17 @@ export interface OpencodeSnapshotPayload {
       lastError: string | null
     }>
   }
+}
+
+export interface ProcessResult {
+  stdout: string
+  stderr: string
+  code: number
+}
+
+export interface MessageRecord {
+  info: unknown
+  parts: unknown[]
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -58,6 +80,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const handler = (_e: IpcRendererEvent, snap: OpencodeSnapshotPayload): void => cb(snap)
       ipcRenderer.on('opencode:snapshot', handler)
       return () => ipcRenderer.removeListener('opencode:snapshot', handler)
-    }
+    },
+    getMessages: (sessionId: string): Promise<MessageRecord[]> =>
+      ipcRenderer.invoke('opencode:session:messages', sessionId),
+    sendPrompt: (sessionId: string, text: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('opencode:session:prompt', sessionId, text),
+    respondPermission: (
+      sessionId: string,
+      permissionId: string,
+      response: 'once' | 'always' | 'reject'
+    ): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('opencode:session:respond', sessionId, permissionId, response),
+    abortSession: (sessionId: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('opencode:session:abort', sessionId),
+    createSession: (args: {
+      instanceKey?: string
+      directory: string
+      prompt: string
+      title?: string
+    }): Promise<{ sessionId: string }> => ipcRenderer.invoke('opencode:session:create', args),
+    getDiff: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('opencode:diff', path),
+    getTodo: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('opencode:todo', path)
   }
 })

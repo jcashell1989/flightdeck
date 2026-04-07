@@ -77,21 +77,28 @@
 
 **Goal:** Inspect sessions and dispatch new tasks without leaving the dashboard.
 
-**Scope:**
-- Context panel: Conversation tab (message rendering, user/agent/tool types, scroll, reply input)
-- Context panel: Diff tab (file tree + unified diff, cleo-parchment diff colors)
-- Context panel: Todo tab (`td` output renderer)
-- Attention banners (approval Allow/Deny, question reply, review Mark Reviewed)
-- Cmd+K dispatch overlay (prompt input, project/agent/session selectors, dispatch history)
-- Full-screen session mode (`F` / double-click)
-- Reply-to-agent input (send follow-up instructions to running session)
+**Shipped:**
+- `OpencodeInstanceClient` extended with action methods: `fetchMessages`, `sendPrompt`, `respondPermission`, `abortSession`, `createSession`. Permission tracking upgraded from a `Set<string>` of IDs to a `Map<string, SdkPermission>` so the renderer can render the actual title/pattern/command for approval banners.
+- `OpencodeRegistry` gains lookup helpers (`findClientForSession`, `findClientByKey`, `firstClient`, `listClients`) used by the new IPC handlers.
+- IPC bridge adds: `opencode:session:messages`, `opencode:session:prompt`, `opencode:session:respond`, `opencode:session:abort`, `opencode:session:create`, `opencode:diff` (spawns `git -C <path> diff --no-color`), `opencode:todo` (spawns `td usage -q -w <path>`). All exposed via `window.electronAPI.opencode`.
+- Renderer: centralized `electronAPI.d.ts` ambient types (previously scattered local `declare global` blocks).
+- `useSessionDetail(session, config)` hook fetches messages on session change and refetches when `lastActivity` advances (live snapshot push → refetch). Mock mode returns a static fixture.
+- `ContextPanel` rewritten: clickable tab bar (Conversation / Diff / Todo). Conversation renders user/agent/tool parts with collapsible tool output and auto-scroll-to-bottom. Diff tab runs `git diff` in main and colorizes +/−/@@ lines. Todo tab runs `td usage -q` with a Refresh button. Reply textarea sends prompts via `session.prompt` (disabled in mock mode, disabled while session state disallows reply).
+- `AttentionBanner` wired to real actions: Allow → `respondPermission('once')`, Deny → `respondPermission('reject')`. Question state points the user at the reply box. Review button is a no-op placeholder (state never assigned in Phase 3).
+- `CmdKDispatch` overlay: prompt textarea + project selector + recent dispatches (localStorage, bounded to 20 entries). Cmd/Ctrl+Enter submits via `createSession` + `sendPrompt`. Esc closes. Mock mode skips the dispatch with a console warning.
+- Full-screen mode: `F` toggles (NavRail + main-content hidden, ContextPanel fills body). Escape cascades: CmdK → full-screen → panel.
+- Keyboard nav: Cmd/Ctrl+K + Escape are global (work inside text inputs). J/K/F/1-4/Enter still ignore inputs.
+- TopBar `⌘K Dispatch` button is now a real button wired to the same handler.
 
-**Validation:**
-- Approve a tool-use request from the attention banner
-- Reply to a clarifying question
-- Dispatch a new task via Cmd+K, watch it run
-- Review a completed session's diff
-- Full-screen mode enters and exits cleanly
+**Scope changes from the original plan:**
+- Diff tab renders a single unified text block rather than a file tree + diff split. File tree revisit in Phase 4 if it becomes ergonomic pain.
+- Dispatch overlay target selector is project-only. Agent defaults to opencode (claude-code is still Phase 4 monitor-only) and session mode is always "New session". Append-to-existing is a follow-up — reply to running sessions already works from the context panel.
+- `review` state remains reserved and unassigned in Phase 3. The `Mark Reviewed` button is a visual placeholder until the watermark signal lands.
+
+**Validation status:**
+- ✅ `npm run typecheck` clean.
+- ✅ `npm run build` green (main 91.76 kB, renderer 632.03 kB).
+- ⏳ Reviewer must manually smoke: (1) click a session card → context panel opens; (2) switch tabs (Conversation/Diff/Todo) with a real opencode project and confirm live data renders; (3) press `F` → full-screen, `Esc` → back; (4) press `⌘K` → dispatch overlay, fire a prompt at a real directory, confirm session appears on dashboard; (5) trigger a permission request in opencode, click Allow/Deny, confirm the server receives it.
 
 ---
 

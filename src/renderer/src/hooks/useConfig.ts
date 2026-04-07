@@ -1,35 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { AppConfig, Project } from '../types'
-
-interface OpencodeSnapshotPayload {
-  projects: Project[]
-  aggregateStatus: {
-    status: 'disabled' | 'connecting' | 'connected' | 'reconnecting' | 'error'
-    perInstance: Array<{
-      key: string
-      status: 'connecting' | 'connected' | 'reconnecting' | 'error'
-      lastError: string | null
-    }>
-  }
-}
-
-declare global {
-  interface Window {
-    electronAPI?: {
-      getTheme: () => Promise<'dark' | 'light'>
-      onThemeChanged: (cb: (theme: 'dark' | 'light') => void) => () => void
-      config: {
-        get: () => Promise<AppConfig>
-        set: (patch: Partial<AppConfig>) => Promise<AppConfig>
-        onChange: (cb: (cfg: AppConfig) => void) => () => void
-      }
-      opencode: {
-        getSnapshot: () => Promise<OpencodeSnapshotPayload>
-        onSnapshot: (cb: (snap: OpencodeSnapshotPayload) => void) => () => void
-      }
-    }
-  }
-}
+import { AppConfig } from '../types'
 
 export function useConfig(): {
   config: AppConfig | null

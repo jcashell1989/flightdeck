@@ -1,5 +1,14 @@
 export type SessionState = 'running' | 'idle' | 'approval' | 'question' | 'review' | 'error'
 
+export interface PendingPermission {
+  id: string
+  type: string
+  title?: string
+  pattern?: string
+  command?: string
+  metadata: Record<string, unknown>
+}
+
 export interface Session {
   id: string
   agentType: 'opencode' | 'claude-code'
@@ -8,6 +17,8 @@ export interface Session {
   startedAt: number
   lastActivity: number
   projectId: string
+  instanceKey?: string
+  pendingPermission?: PendingPermission | null
 }
 
 export interface Project {

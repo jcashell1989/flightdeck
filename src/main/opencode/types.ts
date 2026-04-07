@@ -13,6 +13,15 @@ export type NormalizedSessionState =
   | 'question'
   | 'error'
 
+export interface PendingPermission {
+  id: string
+  type: string
+  title?: string
+  pattern?: string
+  command?: string
+  metadata: Record<string, unknown>
+}
+
 export interface NormalizedSession {
   id: string
   agentType: 'opencode'
@@ -21,6 +30,8 @@ export interface NormalizedSession {
   startedAt: number
   lastActivity: number
   projectId: string
+  instanceKey: string
+  pendingPermission?: PendingPermission | null
 }
 
 export interface NormalizedProject {

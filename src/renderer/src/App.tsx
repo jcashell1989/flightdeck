@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from 'react'
-import { View, Session } from './types'
+import { useCallback, useMemo, useState } from 'react'
+import { Session, View } from './types'
 import { useTheme } from './hooks/useTheme'
 import { useKeyboardNav } from './hooks/useKeyboardNav'
 import { useConfig } from './hooks/useConfig'
@@ -7,6 +7,7 @@ import { useSessionService } from './hooks/useSessionService'
 import { TopBar } from './components/TopBar'
 import { NavRail } from './components/NavRail'
 import { ContextPanel } from './components/ContextPanel'
+import { CmdKDispatch } from './components/CmdKDispatch'
 import { Dashboard } from './views/Dashboard'
 import { Sessions } from './views/Sessions'
 import { Projects } from './views/Projects'
@@ -20,15 +21,25 @@ export function App() {
   const [activeView, setActiveView] = useState<View>('dashboard')
   const [focusIndex, setFocusIndex] = useState(0)
   const [panelOpen, setPanelOpen] = useState(false)
+  const [fullScreen, setFullScreen] = useState(false)
+  const [cmdKOpen, setCmdKOpen] = useState(false)
 
   const allSessions = useMemo(() => projects.flatMap((p) => p.sessions), [projects])
 
   const focusedSession = allSessions[focusIndex] ?? null
   const selectedSession = panelOpen ? focusedSession : null
+  const selectedProject = useMemo(
+    () =>
+      selectedSession
+        ? projects.find((p) => p.sessions.some((s) => s.id === selectedSession.id)) ?? null
+        : null,
+    [projects, selectedSession]
+  )
 
   const handleViewChange = useCallback((view: View) => {
     setActiveView(view)
     setPanelOpen(false)
+    setFullScreen(false)
   }, [])
 
   const handleSessionClick = useCallback(
@@ -42,7 +53,33 @@ export function App() {
 
   const handleClosePanel = useCallback(() => {
     setPanelOpen(false)
+    setFullScreen(false)
   }, [])
+
+  const handleToggleFullScreen = useCallback(() => {
+    if (!panelOpen) {
+      setPanelOpen(true)
+      setFullScreen(true)
+      return
+    }
+    setFullScreen((f) => !f)
+  }, [panelOpen])
+
+  const handleEscape = useCallback(() => {
+    // Cascade: CmdK > fullScreen > panel > noop
+    if (cmdKOpen) {
+      setCmdKOpen(false)
+      return
+    }
+    if (fullScreen) {
+      setFullScreen(false)
+      return
+    }
+    if (panelOpen) {
+      setPanelOpen(false)
+      return
+    }
+  }, [cmdKOpen, fullScreen, panelOpen])
 
   useKeyboardNav({
     onViewChange: handleViewChange,
@@ -52,33 +89,68 @@ export function App() {
     onFocusPrev: () => {
       setFocusIndex((i) => Math.max(i - 1, 0))
     },
-    onEscape: handleClosePanel,
-    onEnter: () => setPanelOpen(true)
+    onEscape: handleEscape,
+    onEnter: () => setPanelOpen(true),
+    onToggleFullScreen: handleToggleFullScreen,
+    onOpenCmdK: () => setCmdKOpen(true)
   })
 
   const focusedSessionId = focusedSession?.id ?? null
 
+  const handleDispatched = useCallback(
+    (sessionId: string) => {
+      // Focus the newly created session once it shows up in a snapshot push.
+      // Best-effort: if the id is already in allSessions, jump to it now.
+      const idx = allSessions.findIndex((s) => s.id === sessionId)
+      if (idx >= 0) {
+        setFocusIndex(idx)
+        setPanelOpen(true)
+      }
+    },
+    [allSessions]
+  )
+
   return (
     <div className="app-layout">
-      <TopBar sessions={allSessions} connectionStatus={connectionStatus} />
+      <TopBar
+        sessions={allSessions}
+        connectionStatus={connectionStatus}
+        onCmdKClick={() => setCmdKOpen(true)}
+      />
       <div className="app-body">
-        <NavRail activeView={activeView} onViewChange={handleViewChange} />
-        <div className="main-content">
-          {activeView === 'dashboard' && (
-            <Dashboard
-              projects={projects}
-              focusedSessionId={focusedSessionId}
-              onSessionClick={handleSessionClick}
-            />
-          )}
-          {activeView === 'sessions' && (
-            <Sessions projects={projects} onSessionClick={handleSessionClick} />
-          )}
-          {activeView === 'projects' && <Projects projects={projects} />}
-          {activeView === 'settings' && <Settings config={config} setConfig={setConfig} />}
-        </div>
-        <ContextPanel session={selectedSession} onClose={handleClosePanel} />
+        {!fullScreen && <NavRail activeView={activeView} onViewChange={handleViewChange} />}
+        {!fullScreen && (
+          <div className="main-content">
+            {activeView === 'dashboard' && (
+              <Dashboard
+                projects={projects}
+                focusedSessionId={focusedSessionId}
+                onSessionClick={handleSessionClick}
+              />
+            )}
+            {activeView === 'sessions' && (
+              <Sessions projects={projects} onSessionClick={handleSessionClick} />
+            )}
+            {activeView === 'projects' && <Projects projects={projects} />}
+            {activeView === 'settings' && <Settings config={config} setConfig={setConfig} />}
+          </div>
+        )}
+        <ContextPanel
+          session={selectedSession}
+          project={selectedProject}
+          config={config}
+          fullScreen={fullScreen}
+          onClose={handleClosePanel}
+          onToggleFullScreen={handleToggleFullScreen}
+        />
       </div>
+      <CmdKDispatch
+        open={cmdKOpen}
+        projects={projects}
+        config={config}
+        onClose={() => setCmdKOpen(false)}
+        onDispatched={handleDispatched}
+      />
     </div>
   )
 }

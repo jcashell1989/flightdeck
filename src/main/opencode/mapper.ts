@@ -15,7 +15,8 @@ import type {
 import type {
   NormalizedProject,
   NormalizedSession,
-  NormalizedSessionState
+  NormalizedSessionState,
+  PendingPermission
 } from './types'
 import type { OpencodeInstance } from '../config/store'
 
@@ -25,7 +26,7 @@ import type { OpencodeInstance } from '../config/store'
 export interface InternalSessionState {
   meta: SdkSession
   sdkStatus: SdkSessionStatus
-  pendingPermissions: Set<string>
+  pendingPermissions: Map<string, SdkPermission>
   lastError: string | null
   currentAction: string
   lastActivity: number
@@ -35,7 +36,7 @@ export function initialSessionState(meta: SdkSession): InternalSessionState {
   return {
     meta,
     sdkStatus: { type: 'idle' },
-    pendingPermissions: new Set(),
+    pendingPermissions: new Map(),
     lastError: null,
     currentAction: meta.title || 'waiting',
     lastActivity: meta.time.updated ?? meta.time.created
@@ -58,11 +59,31 @@ export function deriveState(s: InternalSessionState): NormalizedSessionState {
 
 export function toNormalizedSession(
   s: InternalSessionState,
-  projectId: string
+  projectId: string,
+  instanceKey: string
 ): NormalizedSession {
   // Use the full SDK id as the canonical id. Display shortening (last 4 chars)
   // is the renderer's job — see SessionCard / Sessions.tsx — so that the
   // identity used for React keys, focus tracking, and IPC lookups is unique.
+  let pendingPermission: PendingPermission | null = null
+  const firstPerm = s.pendingPermissions.values().next().value as SdkPermission | undefined
+  if (firstPerm) {
+    const meta = (firstPerm.metadata ?? {}) as Record<string, unknown>
+    const pat = firstPerm.pattern
+    pendingPermission = {
+      id: firstPerm.id,
+      type: firstPerm.type,
+      title: firstPerm.title,
+      pattern: Array.isArray(pat) ? pat.join(' ') : pat,
+      command:
+        typeof meta.command === 'string'
+          ? meta.command
+          : typeof meta.cmd === 'string'
+            ? meta.cmd
+            : undefined,
+      metadata: meta
+    }
+  }
   return {
     id: s.meta.id,
     agentType: 'opencode',
@@ -70,7 +91,9 @@ export function toNormalizedSession(
     currentAction: s.currentAction,
     startedAt: s.meta.time.created,
     lastActivity: s.lastActivity,
-    projectId
+    projectId,
+    instanceKey,
+    pendingPermission
   }
 }
 
@@ -83,6 +106,7 @@ export function groupIntoProjects(
   states: Iterable<InternalSessionState>,
   instance: OpencodeInstance
 ): NormalizedProject[] {
+  const instanceKey = `${instance.host}:${instance.port}`
   const byDir = new Map<string, InternalSessionState[]>()
   for (const s of states) {
     const dir = s.meta.directory
@@ -96,12 +120,12 @@ export function groupIntoProjects(
 
   const projects: NormalizedProject[] = []
   for (const [dir, list] of byDir) {
-    const projectId = `${instance.host}:${instance.port}:${dir}`
+    const projectId = `${instanceKey}:${dir}`
     projects.push({
       id: projectId,
       name: basenameOf(dir),
       path: dir,
-      sessions: list.map((s) => toNormalizedSession(s, projectId))
+      sessions: list.map((s) => toNormalizedSession(s, projectId, instanceKey))
     })
   }
   return projects
@@ -182,7 +206,7 @@ export function applyEvent(
       const perm: SdkPermission = event.properties
       const s = states.get(perm.sessionID)
       if (!s) return false
-      s.pendingPermissions.add(perm.id)
+      s.pendingPermissions.set(perm.id, perm)
       s.lastActivity = Date.now()
       return true
     }
