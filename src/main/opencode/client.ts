@@ -68,19 +68,21 @@ export class OpencodeInstanceClient extends EventEmitter {
     try {
       this.openEventStream()
       await this.hydrate()
-      // Replay any events that landed during hydrate, then go live.
-      const buffered = this.eventBuffer
-      this.eventBuffer = null
-      let mutated = false
-      if (buffered) {
-        for (const ev of buffered) {
-          if (applyEvent(this.sessions, ev)) mutated = true
-        }
+      // Drain the buffer before going live. Any frames that arrive during
+      // drain are still buffered (eventBuffer !== null), so they get picked
+      // up by the next loop iteration. Only after the buffer is fully empty
+      // do we null it and let handleRawEvent take the direct-apply path.
+      // This enforces replay-before-live ordering without relying on the
+      // registry's incidental re-snapshot behavior.
+      while (this.eventBuffer && this.eventBuffer.length > 0) {
+        const batch = this.eventBuffer
+        this.eventBuffer = []
+        for (const ev of batch) applyEvent(this.sessions, ev)
       }
+      this.eventBuffer = null
       this.reconnectAttempt = 0
       this.setStatus('connected')
       this.emit('change', this.snapshot())
-      if (mutated) this.emit('change', this.snapshot())
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err)
       this.eventBuffer = null
