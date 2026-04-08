@@ -23,6 +23,9 @@ export interface AgentProfile {
   /**
    * Decrypted API key — present in memory only, never written to disk.
    * On disk the key is stored as `apiKeyEncrypted` (base64 safeStorage ciphertext).
+   * May be undefined if decryption failed on load OR if encryption is
+   * unavailable on this machine — the ciphertext is still preserved on disk
+   * via the shadow map, so re-saving the profile does not wipe the key.
    */
   apiKey?: string
   /** When true, this profile is pre-selected in the dispatch overlay */
@@ -47,10 +50,13 @@ export interface AppConfig {
 
 /**
  * On-disk shape for AgentProfile — apiKey is replaced by apiKeyEncrypted.
- * We keep apiKey absent from disk entirely.
+ * A legacy plaintext `apiKey` field is tolerated on READ only (for migration
+ * from pre-safeStorage configs) and never written back.
  */
 interface PersistedProfile extends Omit<AgentProfile, 'apiKey'> {
   apiKeyEncrypted?: string
+  /** Legacy plaintext — only present in configs written before safeStorage landed. */
+  apiKey?: string
 }
 
 interface PersistedConfig {
@@ -67,74 +73,176 @@ const DEFAULT_CONFIG: AppConfig = {
   profiles: []
 }
 
-// ── safeStorage helpers ────────────────────────────────────────────────────
+// ── Crypto abstraction ─────────────────────────────────────────────────────
 
 /**
- * Encrypt a plaintext API key. Returns a base64 string safe for JSON storage.
- * Must only be called after app.whenReady().
+ * Minimal interface over Electron's safeStorage — parameterised so the pure
+ * serialisation helpers can be unit-tested with a fake implementation.
  */
-function encryptKey(plain: string): string {
-  const buf = safeStorage.encryptString(plain)
-  return buf.toString('base64')
+export interface ConfigCrypto {
+  available(): boolean
+  /** Encrypt plaintext; returns base64 ciphertext. Caller must check available() first. */
+  encrypt(plain: string): string
+  /** Decrypt base64 ciphertext; returns null if decryption fails. */
+  decrypt(cipher: string): string | null
 }
 
-/**
- * Decrypt a base64-encoded ciphertext produced by encryptKey.
- * Returns null if decryption fails (e.g. key was produced on a different machine).
- */
-function decryptKey(cipher: string): string | null {
-  try {
-    const buf = Buffer.from(cipher, 'base64')
-    return safeStorage.decryptString(buf)
-  } catch {
-    return null
+const electronCrypto: ConfigCrypto = {
+  available: () => {
+    try {
+      return safeStorage.isEncryptionAvailable()
+    } catch {
+      return false
+    }
+  },
+  encrypt: (plain) => safeStorage.encryptString(plain).toString('base64'),
+  decrypt: (cipher) => {
+    try {
+      return safeStorage.decryptString(Buffer.from(cipher, 'base64'))
+    } catch {
+      return null
+    }
   }
 }
 
 // ── Serialisation helpers ──────────────────────────────────────────────────
 
 /**
- * Convert in-memory AppConfig (with plaintext apiKey) to the on-disk shape
- * (with apiKeyEncrypted, no apiKey).
+ * Convert in-memory AppConfig (with plaintext apiKey) to the on-disk shape.
+ *
+ * Key invariant: **NEVER drops a ciphertext that already exists.** If the
+ * in-memory `apiKey` is absent (because decryption failed on load, or the
+ * user hasn't re-entered it), we fall back to the ciphertext preserved in
+ * `shadow` for that profile id. This means any unrelated `set()` that
+ * round-trips the full config will not wipe the stored key.
+ *
+ * Also prunes shadow entries for profiles no longer present in the config,
+ * so deleting a profile actually removes its ciphertext from disk.
  */
-function toPersistedConfig(cfg: AppConfig): PersistedConfig {
-  return {
-    ...cfg,
-    profiles: cfg.profiles.map((p) => {
-      const { apiKey, ...rest } = p
-      const persisted: PersistedProfile = { ...rest }
-      if (apiKey) {
-        persisted.apiKeyEncrypted = encryptKey(apiKey)
+export function toPersisted(
+  cfg: AppConfig,
+  crypto: ConfigCrypto,
+  shadow: Map<string, string>
+): PersistedConfig {
+  const available = crypto.available()
+
+  const profiles: PersistedProfile[] = cfg.profiles.map((p) => {
+    const { apiKey, ...rest } = p
+    const persisted: PersistedProfile = { ...rest }
+
+    let cipher: string | undefined
+    if (apiKey && available) {
+      // Freshly encrypt and update the shadow map.
+      try {
+        cipher = crypto.encrypt(apiKey)
+        shadow.set(p.id, cipher)
+      } catch (e) {
+        console.warn(
+          `[ConfigStore] encrypt failed for profile "${p.label}": ${String(e)} — ` +
+            'preserving previously stored ciphertext if any.'
+        )
+        cipher = shadow.get(p.id)
       }
-      return persisted
-    })
+    } else {
+      // Either plaintext is absent (decrypt-failed or never loaded) or
+      // encryption is unavailable right now. Preserve whatever ciphertext
+      // was on disk before.
+      cipher = shadow.get(p.id)
+    }
+
+    if (cipher !== undefined) {
+      persisted.apiKeyEncrypted = cipher
+    }
+    return persisted
+  })
+
+  // Prune shadow entries for deleted profiles.
+  const liveIds = new Set(cfg.profiles.map((p) => p.id))
+  for (const id of Array.from(shadow.keys())) {
+    if (!liveIds.has(id)) shadow.delete(id)
+  }
+
+  return {
+    opencode: cfg.opencode,
+    mock: cfg.mock,
+    projects: cfg.projects,
+    profiles
   }
 }
 
 /**
- * Convert on-disk PersistedConfig to in-memory AppConfig (decrypt keys).
- * If a key cannot be decrypted (wrong machine / corrupted), apiKey is omitted
- * and a warning is logged — the profile is still usable, just keyless.
+ * Convert on-disk PersistedConfig to in-memory AppConfig.
+ *
+ * Populates the shadow map with every ciphertext encountered, so future writes
+ * can preserve ciphertext even when decryption fails or encryption is
+ * unavailable on this boot.
+ *
+ * Legacy migration: if a profile has a plaintext `apiKey` field (pre-safeStorage
+ * configs), it is kept in memory and will be encrypted on the next `set()`.
+ * The plaintext is NOT dropped until it has successfully round-tripped through
+ * the shadow map as ciphertext.
+ *
+ * Clears the shadow map before populating to avoid carrying stale entries
+ * across reloads.
  */
-function fromPersistedConfig(persisted: PersistedConfig): AppConfig {
-  return {
-    ...persisted,
-    profiles: persisted.profiles.map((p) => {
-      const { apiKeyEncrypted, ...rest } = p
-      const profile: AgentProfile = { ...rest }
-      if (apiKeyEncrypted) {
-        const plain = decryptKey(apiKeyEncrypted)
+export function fromPersisted(
+  persisted: PersistedConfig,
+  crypto: ConfigCrypto,
+  shadow: Map<string, string>
+): AppConfig {
+  const available = crypto.available()
+  shadow.clear()
+
+  const profiles: AgentProfile[] = persisted.profiles.map((p) => {
+    const { apiKeyEncrypted, apiKey: legacyPlaintext, ...rest } = p
+    const profile: AgentProfile = { ...rest }
+
+    if (apiKeyEncrypted) {
+      // Always preserve ciphertext in the shadow, regardless of whether we
+      // can decrypt it right now. This is what prevents the "unrelated
+      // set() wipes the key" bug: even if apiKey ends up undefined below,
+      // the next toPersisted() will write this cipher back out.
+      shadow.set(p.id, apiKeyEncrypted)
+
+      if (available) {
+        const plain = crypto.decrypt(apiKeyEncrypted)
         if (plain !== null) {
           profile.apiKey = plain
         } else {
           console.warn(
             `[ConfigStore] could not decrypt apiKey for profile "${p.label}" — ` +
-              'key may have been encrypted on a different machine. Re-enter the key in Settings.'
+              'ciphertext preserved. Re-enter the key in Settings to re-encrypt ' +
+              'for this machine.'
           )
         }
+      } else {
+        console.warn(
+          `[ConfigStore] encryption unavailable on this machine — apiKey for ` +
+            `profile "${p.label}" will not be decrypted but the stored ciphertext ` +
+            'is preserved.'
+        )
       }
-      return profile
-    })
+    } else if (legacyPlaintext) {
+      // Pre-safeStorage migration path. Keep the plaintext in memory so the
+      // profile is usable immediately; the next configStore.set() will
+      // re-write with apiKeyEncrypted (provided encryption is available).
+      console.warn(
+        `[ConfigStore] legacy plaintext apiKey found for profile "${p.label}" — ` +
+          'will be encrypted on the next save.'
+      )
+      profile.apiKey = legacyPlaintext
+      // Deliberately do NOT populate shadow — we want the next toPersisted()
+      // to run through the fresh-encrypt branch.
+    }
+
+    return profile
+  })
+
+  return {
+    opencode: persisted.opencode,
+    mock: persisted.mock,
+    projects: persisted.projects,
+    profiles
   }
 }
 
@@ -240,21 +348,66 @@ class ConfigStore extends EventEmitter {
   private config: AppConfig = DEFAULT_CONFIG
   private path: string = ''
   private loaded = false
+  /**
+   * profileId → base64 safeStorage ciphertext, populated on load and on every
+   * successful encrypt. Reserved as the fallback source of ciphertext when
+   * writing a profile whose in-memory `apiKey` is absent, so unrelated
+   * `set()` calls can never wipe a stored key.
+   */
+  private shadowEncrypted = new Map<string, string>()
 
   async init(): Promise<AppConfig> {
     this.path = join(app.getPath('userData'), 'config.json')
+
+    let raw: string
     try {
-      const raw = await fs.readFile(this.path, 'utf8')
-      const parsed = JSON.parse(raw) as PersistedConfig
-      // Migrate: if any profile still has a plaintext apiKey on disk (legacy),
-      // fromPersistedConfig won't find apiKeyEncrypted and apiKey stays absent.
-      // The user will need to re-enter it — acceptable one-time migration cost.
-      const decoded = fromPersistedConfig(parsed)
-      this.config = this.merge(DEFAULT_CONFIG, decoded)
-    } catch {
-      await this.writePersisted(toPersistedConfig(DEFAULT_CONFIG))
+      raw = await fs.readFile(this.path, 'utf8')
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException)?.code
+      if (code === 'ENOENT') {
+        // First run: create defaults.
+        await this.writePersisted(toPersisted(DEFAULT_CONFIG, electronCrypto, this.shadowEncrypted))
+        this.config = DEFAULT_CONFIG
+        this.loaded = true
+        return this.config
+      }
+      // Any other read error (EACCES, EBUSY, …) — preserve the file on disk
+      // and fall back to in-memory defaults. DO NOT write.
+      console.error(
+        `[ConfigStore] failed to read ${this.path} (${code ?? 'unknown'}): ${String(e)}. ` +
+          'Using in-memory defaults; NOT writing to disk to avoid data loss.'
+      )
       this.config = DEFAULT_CONFIG
+      this.loaded = true
+      return this.config
     }
+
+    let parsed: PersistedConfig
+    try {
+      parsed = JSON.parse(raw) as PersistedConfig
+    } catch (e) {
+      // Corrupt JSON on disk. Back up the bad file before overwriting.
+      const bakPath = this.path + '.bak'
+      try {
+        await fs.writeFile(bakPath, raw, 'utf8')
+        console.warn(
+          `[ConfigStore] config.json failed to parse (${String(e)}); ` +
+            `backed up to ${bakPath}. Writing defaults.`
+        )
+      } catch (bakErr) {
+        console.error(
+          `[ConfigStore] additionally failed to write backup ${bakPath}: ${String(bakErr)}. ` +
+            'Defaults will be written anyway.'
+        )
+      }
+      await this.writePersisted(toPersisted(DEFAULT_CONFIG, electronCrypto, this.shadowEncrypted))
+      this.config = DEFAULT_CONFIG
+      this.loaded = true
+      return this.config
+    }
+
+    const decoded = fromPersisted(parsed, electronCrypto, this.shadowEncrypted)
+    this.config = this.merge(DEFAULT_CONFIG, decoded)
     this.loaded = true
     return this.config
   }
@@ -267,7 +420,7 @@ class ConfigStore extends EventEmitter {
   async set(patch: unknown): Promise<AppConfig> {
     const validated = validatePatch(patch)
     const next = this.merge(this.config, validated)
-    await this.writePersisted(toPersistedConfig(next))
+    await this.writePersisted(toPersisted(next, electronCrypto, this.shadowEncrypted))
     this.config = next
     this.emit('change', next)
     return next

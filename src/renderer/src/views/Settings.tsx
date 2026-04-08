@@ -52,7 +52,7 @@ export function Settings({ config, setConfig }: SettingsProps) {
 
       <Section title="Agent Profiles">
         <ProfileList />
-        <Hint>One row per agent configuration. opencode profiles are dispatchable from ⌘K. API keys are stored in plain text in the app config.</Hint>
+        <Hint>One row per agent configuration. opencode profiles are dispatchable from ⌘K. API keys are encrypted at rest via OS keychain (Electron safeStorage). Click the dot next to the key field to reveal.</Hint>
       </Section>
     </div>
   )
@@ -513,20 +513,45 @@ function ProfileRow({
           style={profileInputStyle}
         />
       </td>
-      {/* API Key — password field that reveals on focus */}
+      {/* API Key — password field; reveal requires explicit eye-icon click */}
       <td style={{ padding: '4px 8px', width: 120 }}>
-        <input
-          type={apiKeyVisible ? 'text' : 'password'}
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          onFocus={() => setApiKeyVisible(true)}
-          onBlur={() => {
-            setApiKeyVisible(false)
-            commit()
-          }}
-          onKeyDown={handleKeyDown}
-          style={profileInputStyle}
-        />
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <input
+            type={apiKeyVisible ? 'text' : 'password'}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            onBlur={() => {
+              // Re-mask on blur so the key never stays visible unattended.
+              setApiKeyVisible(false)
+              commit()
+            }}
+            onKeyDown={handleKeyDown}
+            // autoComplete=off + data-1p-ignore to discourage password managers
+            // from treating this as a login field.
+            autoComplete="off"
+            data-1p-ignore="true"
+            style={{ ...profileInputStyle, paddingRight: 24 }}
+          />
+          <button
+            type="button"
+            onClick={() => setApiKeyVisible((v) => !v)}
+            aria-label={apiKeyVisible ? 'Hide API key' : 'Show API key'}
+            title={apiKeyVisible ? 'Hide' : 'Show'}
+            style={{
+              position: 'absolute',
+              right: 4,
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--fg-subtle)',
+              cursor: 'pointer',
+              padding: 0,
+              fontSize: 11,
+              lineHeight: 1
+            }}
+          >
+            {apiKeyVisible ? '○' : '●'}
+          </button>
+        </div>
       </td>
       {/* Default radio */}
       <td style={{ padding: '4px 8px', width: 50, textAlign: 'center' }}>
@@ -627,6 +652,8 @@ function ProfileAddRow({ onAdd }: { onAdd: (draft: Omit<AgentProfile, 'id'>) => 
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           onKeyDown={handleKeyDown}
+          autoComplete="off"
+          data-1p-ignore="true"
           style={profileInputStyle}
         />
       </td>
