@@ -1,10 +1,12 @@
-import { app, BrowserWindow, nativeTheme, ipcMain, webContents } from 'electron'
+import { app, BrowserWindow, nativeTheme, ipcMain, webContents, dialog } from 'electron'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { execFile } from 'child_process'
+import { promises as fs } from 'fs'
 import { is } from '@electron-toolkit/utils'
-import { configStore, AppConfig } from './config/store'
+import { configStore, AppConfig, ProjectConfig } from './config/store'
 import { opencodeRegistry } from './opencode/registry'
+import { claudeMonitor } from './claude/monitor'
 
 // Main is bundled as ESM (electron.vite.config.ts: format 'es'), so __dirname
 // is not defined. Resolve it from import.meta.url instead.
@@ -119,6 +121,87 @@ ipcMain.handle('opencode:todo', async (_e, path: string) => {
   return runCmd('td', ['usage', '-q', '-w', path], path)
 })
 
+// ── Project management IPC ─────────────────────────────────────────────────
+
+/** Validate a project path and return its status. */
+ipcMain.handle('project:validate', async (_e, path: string) => {
+  if (!validPath(path)) return { valid: false, reason: 'invalid path' }
+  try {
+    const stat = await fs.stat(path)
+    if (!stat.isDirectory()) return { valid: false, reason: 'not a directory' }
+  } catch {
+    return { valid: false, reason: 'path does not exist' }
+  }
+  // Check if it's a git repo.
+  try {
+    await fs.access(join(path, '.git'))
+    return { valid: true, isGitRepo: true }
+  } catch {
+    return { valid: true, isGitRepo: false }
+  }
+})
+
+/** Open a native folder picker and return the selected path. */
+ipcMain.handle('project:browse', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory', 'createDirectory']
+  })
+  return result.canceled ? null : result.filePaths[0] ?? null
+})
+
+/** Add a project to the config. Optionally git-init the directory. */
+ipcMain.handle(
+  'project:add',
+  async (_e, args: { path: string; name?: string; gitInit?: boolean }) => {
+    if (!validPath(args.path)) throw new Error('invalid path')
+    const cfg = configStore.get()
+    if (cfg.projects.some((p) => p.path === args.path)) {
+      throw new Error('project already exists')
+    }
+    if (args.gitInit) {
+      await runCmd('git', ['init'], args.path)
+    }
+    const project: ProjectConfig = {
+      path: args.path,
+      name: args.name,
+      archived: false
+    }
+    await configStore.set({ projects: [...cfg.projects, project] })
+    return { ok: true }
+  }
+)
+
+/** Archive (soft-delete) a project. */
+ipcMain.handle('project:archive', async (_e, path: string) => {
+  if (!validPath(path)) throw new Error('invalid path')
+  const cfg = configStore.get()
+  const projects = cfg.projects.map((p) =>
+    p.path === path ? { ...p, archived: true } : p
+  )
+  await configStore.set({ projects })
+  return { ok: true }
+})
+
+/** Restore an archived project. */
+ipcMain.handle('project:restore', async (_e, path: string) => {
+  if (!validPath(path)) throw new Error('invalid path')
+  const cfg = configStore.get()
+  const projects = cfg.projects.map((p) =>
+    p.path === path ? { ...p, archived: false } : p
+  )
+  await configStore.set({ projects })
+  return { ok: true }
+})
+
+/** Hard-delete a project from the config. */
+ipcMain.handle('project:delete', async (_e, path: string) => {
+  if (!validPath(path)) throw new Error('invalid path')
+  const cfg = configStore.get()
+  const projects = cfg.projects.filter((p) => p.path !== path)
+  await configStore.set({ projects })
+  return { ok: true }
+})
+
 configStore.on('change', (cfg: AppConfig) => broadcast('config-changed', cfg))
 
 opencodeRegistry.on('change', () => {
@@ -160,7 +243,10 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   await configStore.init()
+  // Wire Claude Code monitor into the registry before starting either.
+  opencodeRegistry.setClaudeMonitor(claudeMonitor)
   opencodeRegistry.start()
+  claudeMonitor.start()
   createWindow()
 })
 
@@ -170,6 +256,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   opencodeRegistry.dispose()
+  claudeMonitor.dispose()
 })
 
 app.on('activate', () => {
