@@ -105,14 +105,22 @@
 ## Phase 4 — Claude Code Monitor + Project Management
 
 **Ticket:** `td-a84ca8`
-**Depends on:** `td-4a41eb` (Claude Code monitor design)
+**Depends on:** `td-4a41eb` (Claude Code monitor design — complete, see `docs/spec-claude-monitor.md`)
 
 **Goal:** Claude Code sessions appear alongside opencode sessions. Projects are manageable from the UI.
 
+**Design:** See `docs/spec-claude-monitor.md` for full design. Summary:
+
+- **Data sources:** `~/.claude/sessions/<pid>.json` (live process registry) + `~/.claude/projects/<encoded-path>/<session-uuid>.jsonl` (conversation log)
+- **State inference:** Tail-read last 4KB of JSONL; `assistant.stop_reason=tool_use` → running, `system.stop_hook_summary` → idle, dead process mid-turn → error
+- **Architecture:** `src/main/claude/` module (monitor.ts, parser.ts, types.ts). `ClaudeMonitor` watches files + polls process liveness. Merges into `OpencodeRegistry.getSnapshot()`.
+- **No new IPC:** Reuses `opencode:snapshot` push. Renderer already handles `agentType: 'claude-code'`.
+- **New dep:** `chokidar ^4.0.0` for file watching.
+- **States assigned:** `running`, `idle`, `error` only. `approval`/`question`/`review` not assigned (no structured signal in JSONL).
+
 **Scope:**
-- File watcher on `~/.claude/projects/` for Claude Code session detection
-- Process list polling for running `claude` processes
-- State parsing: map Claude Code file state -> 6 session card states
+- `ClaudeMonitor` + `ClaudeParser` in `src/main/claude/`
+- `OpencodeRegistry` integration (merge Claude Code sessions into snapshot)
 - Monitor-only guard in dispatch UI (can't send to Claude Code)
 - Projects view: add / archive / restore / hard delete
 - Add Project drawer with real-time path validation + git init
@@ -121,9 +129,11 @@
 **Validation:**
 - Run `claude` in a terminal, see it appear on dashboard with correct state
 - Claude Code session transitions through states as work progresses
+- Kill `claude` mid-turn → session shows `error` state
 - Dispatch overlay shows Claude Code as disabled with "monitor only" tooltip
 - Add a new project directory, see it appear on dashboard
 - Archive and restore a project
+- `npm run typecheck` clean
 
 ---
 
