@@ -1,6 +1,38 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Project, ConnectionStatus, AppConfig } from '../types'
 import { mockProjects } from '../mockData'
+
+function basename(path: string): string {
+  const stripped = path.replace(/\/+$/, '')
+  const i = stripped.lastIndexOf('/')
+  return i === -1 ? stripped : stripped.slice(i + 1)
+}
+
+/**
+ * Merge config-declared projects into the live snapshot list. A config
+ * project is only surfaced if it isn't already present (by path) in the
+ * snapshot — otherwise the live entry (with its sessions) wins. Archived
+ * config projects are hidden from the dashboard and dispatch targets.
+ */
+function mergeConfigProjects(
+  live: Project[],
+  config: AppConfig | null
+): Project[] {
+  if (!config) return live
+  const seen = new Set(live.map((p) => p.path))
+  const extras: Project[] = []
+  for (const cp of config.projects) {
+    if (cp.archived) continue
+    if (seen.has(cp.path)) continue
+    extras.push({
+      id: `config:${cp.path}`,
+      name: cp.name ?? basename(cp.path),
+      path: cp.path,
+      sessions: []
+    })
+  }
+  return extras.length === 0 ? live : [...live, ...extras]
+}
 
 export interface SessionServiceResult {
   projects: Project[]
@@ -78,8 +110,13 @@ export function useSessionService(config: AppConfig | null): SessionServiceResul
     }
   }, [useMock])
 
+  const mergedProjects = useMemo(
+    () => mergeConfigProjects(liveProjects, config),
+    [liveProjects, config]
+  )
+
   if (useMock) {
     return { projects: mockProjects, connectionStatus: 'disabled', error: null }
   }
-  return { projects: liveProjects, connectionStatus: liveStatus, error: liveError }
+  return { projects: mergedProjects, connectionStatus: liveStatus, error: liveError }
 }
