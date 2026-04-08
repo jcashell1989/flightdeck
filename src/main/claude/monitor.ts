@@ -18,7 +18,7 @@ import { promises as fs } from 'fs'
 import { join, basename } from 'path'
 import { homedir } from 'os'
 import { watch, FSWatcher } from 'chokidar'
-import { parseSessionState, decodeProjectPath, projectName } from './parser'
+import { parseSessionState, projectName } from './parser'
 import type { ClaudeSession, ClaudeProject, ClaudeSnapshot } from './types'
 
 const SESSIONS_DIR = join(homedir(), '.claude', 'sessions')
@@ -156,10 +156,11 @@ export class ClaudeMonitor extends EventEmitter {
       if (session.state === 'running') {
         // Process died while running — treat as error.
         this.sessions.set(entry.sessionId, { ...session, state: 'error' })
+      } else {
+        // Clean exit — remove immediately (process is already gone from this.processes,
+        // so pollLiveness will never see it to clean up).
+        this.sessions.delete(entry.sessionId)
       }
-      // If idle, leave as-is (session ended normally).
-      // We keep the session in the map so it stays visible briefly.
-      // The liveness poll will clean it up after the next cycle.
     }
     this.emit('change')
   }

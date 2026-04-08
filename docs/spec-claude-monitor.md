@@ -230,7 +230,7 @@ A future improvement could cross-reference against `cwd` from the sessions JSON.
 ## Dependencies
 
 - **chokidar** — file watching. Already a transitive dep of electron-vite; add
-  as explicit dep. Version: `^4.0.0` (ESM-native, no fsevents issues on macOS).
+  as explicit dep. Version: `^5.0.0` (ESM-native, no fsevents issues on macOS).
 - No other new dependencies.
 
 ---
