@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Project, Session, isAttention } from '../types'
 import { SessionCard } from './SessionCard'
 
@@ -9,8 +9,44 @@ interface ProjectGroupProps {
   onNewSession?: (projectPath: string) => void
 }
 
+// sessionStorage persists across view switches within the same app run
+// but clears on app restart — matches spec-ux §2 collapse-persistence rule
+// without lifting state through the router outlet.
+const COLLAPSE_STORAGE_KEY = 'agentctl.dashboard.collapsed'
+
+function readCollapsed(projectId: string): boolean {
+  try {
+    const raw = sessionStorage.getItem(COLLAPSE_STORAGE_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw) as Record<string, boolean>
+    return Boolean(parsed[projectId])
+  } catch {
+    return false
+  }
+}
+
+function writeCollapsed(projectId: string, value: boolean): void {
+  try {
+    const raw = sessionStorage.getItem(COLLAPSE_STORAGE_KEY)
+    const parsed = (raw ? JSON.parse(raw) : {}) as Record<string, boolean>
+    if (value) parsed[projectId] = true
+    else delete parsed[projectId]
+    sessionStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify(parsed))
+  } catch {
+    /* storage unavailable — silently degrade to in-memory only */
+  }
+}
+
 export function ProjectGroup({ project, focusedSessionId, onSessionClick, onNewSession }: ProjectGroupProps) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsedState] = useState<boolean>(() => readCollapsed(project.id))
+
+  const setCollapsed = useCallback(
+    (next: boolean) => {
+      setCollapsedState(next)
+      writeCollapsed(project.id, next)
+    },
+    [project.id]
+  )
 
   const activeCount = project.sessions.filter((s) => s.state === 'running' || s.state === 'approval' || s.state === 'question').length
   const attentionCount = project.sessions.filter((s) => isAttention(s.state)).length
