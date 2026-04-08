@@ -143,7 +143,7 @@ export function App() {
             {activeView === 'sessions' && (
               <Sessions projects={projects} onSessionClick={handleSessionClick} />
             )}
-            {activeView === 'projects' && <Projects projects={projects} />}
+            {activeView === 'projects' && <Projects projects={projects} config={config} />}
             {activeView === 'settings' && <Settings config={config} setConfig={setConfig} />}
           </div>
         )}
