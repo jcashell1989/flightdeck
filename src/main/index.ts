@@ -7,6 +7,7 @@ import { is } from '@electron-toolkit/utils'
 import { configStore, AppConfig, ProjectConfig } from './config/store'
 import { opencodeRegistry } from './opencode/registry'
 import { claudeMonitor } from './claude/monitor'
+import { opencodeLauncher } from './opencode/launcher'
 
 // Main is bundled as ESM (electron.vite.config.ts: format 'es'), so __dirname
 // is not defined. Resolve it from import.meta.url instead.
@@ -257,6 +258,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   opencodeRegistry.dispose()
   claudeMonitor.dispose()
+  opencodeLauncher.stopAll()
 })
 
 app.on('activate', () => {
