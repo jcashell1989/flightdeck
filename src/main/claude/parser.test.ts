@@ -78,7 +78,7 @@ vi.mock('fs', async (importOriginal) => {
   }
 })
 
-const mockFs = fs.promises as {
+const mockFs = fs.promises as unknown as {
   stat: ReturnType<typeof vi.fn>
   open: ReturnType<typeof vi.fn>
 }

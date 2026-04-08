@@ -46,6 +46,22 @@ vi.mock('../config/store', () => ({
 }))
 
 import { OpencodeRegistry } from './registry'
+import type { Mock } from 'vitest'
+
+// Typed helper to access mock methods on the fake client instances
+interface MockClient {
+  snapshot: Mock
+  hasSession: Mock
+  dispose: Mock
+  connect: Mock
+  on: Mock
+  off: Mock
+  emit: Mock
+}
+
+function getMockClients(registry: OpencodeRegistry): MockClient[] {
+  return registry.listClients().map((c) => c.client as unknown as MockClient)
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -118,9 +134,9 @@ describe('OpencodeRegistry — deriveAggregate', () => {
     const registry = new OpencodeRegistry()
     registry.start()
     // Grab the created client and override its snapshot
-    const clients = registry.listClients()
+    const clients = getMockClients(registry)
     expect(clients).toHaveLength(1)
-    clients[0].client.snapshot.mockReturnValue({
+    clients[0].snapshot.mockReturnValue({
       instance: { host: '127.0.0.1', port: 4096 },
       status: 'error',
       lastError: 'connection refused',
@@ -133,8 +149,8 @@ describe('OpencodeRegistry — deriveAggregate', () => {
   it('returns reconnecting when instance is reconnecting', () => {
     const registry = new OpencodeRegistry()
     registry.start()
-    const clients = registry.listClients()
-    clients[0].client.snapshot.mockReturnValue({
+    const clients = getMockClients(registry)
+    clients[0].snapshot.mockReturnValue({
       instance: { host: '127.0.0.1', port: 4096 },
       status: 'reconnecting',
       lastError: null,
@@ -158,15 +174,15 @@ describe('OpencodeRegistry — deriveAggregate', () => {
     })
     const registry = new OpencodeRegistry()
     registry.start()
-    const clients = registry.listClients()
+    const clients = getMockClients(registry)
     expect(clients).toHaveLength(2)
-    clients[0].client.snapshot.mockReturnValue({
+    clients[0].snapshot.mockReturnValue({
       instance: { host: '127.0.0.1', port: 4096 },
       status: 'error',
       lastError: 'err',
       projects: []
     })
-    clients[1].client.snapshot.mockReturnValue({
+    clients[1].snapshot.mockReturnValue({
       instance: { host: '127.0.0.1', port: 4097 },
       status: 'reconnecting',
       lastError: null,
@@ -194,8 +210,8 @@ describe('OpencodeRegistry — Claude Code session merging', () => {
     const registry = new OpencodeRegistry()
     registry.start()
 
-    const clients = registry.listClients()
-    clients[0].client.snapshot.mockReturnValue({
+    const clients = getMockClients(registry)
+    clients[0].snapshot.mockReturnValue({
       instance: { host: '127.0.0.1', port: 4096 },
       status: 'connected',
       lastError: null,
@@ -260,8 +276,8 @@ describe('OpencodeRegistry — findClientForSession', () => {
   it('returns the client that owns the session', () => {
     const registry = new OpencodeRegistry()
     registry.start()
-    const clients = registry.listClients()
-    clients[0].client.hasSession.mockImplementation((id: string) => id === 'sess-owned')
+    const clients = getMockClients(registry)
+    clients[0].hasSession.mockImplementation((id: string) => id === 'sess-owned')
 
     expect(registry.findClientForSession('sess-owned')).not.toBeNull()
     expect(registry.findClientForSession('sess-other')).toBeNull()
