@@ -508,7 +508,9 @@ function ProfileRow({
           }}
         >
           {AGENT_TYPES.map((t) => (
-            <option key={t} value={t}>{t}</option>
+            <option key={t} value={t} disabled={t === 'claude-code'}>
+              {t === 'claude-code' ? `${t} (monitor-only)` : t}
+            </option>
           ))}
         </select>
       </td>
@@ -642,7 +644,9 @@ function ProfileAddRow({ onAdd }: { onAdd: (draft: Omit<AgentProfile, 'id'>) => 
           style={{ ...profileInputStyle, cursor: 'pointer' }}
         >
           {AGENT_TYPES.map((t) => (
-            <option key={t} value={t}>{t}</option>
+            <option key={t} value={t} disabled={t === 'claude-code'}>
+              {t === 'claude-code' ? `${t} (monitor-only)` : t}
+            </option>
           ))}
         </select>
       </td>
