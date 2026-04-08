@@ -231,12 +231,17 @@ function ConversationTab({
             loading messages…
           </div>
         )}
-        {detail.error && (
+        {detail.error && !detail.unavailable && (
           <div style={{ color: 'var(--status-error)', fontSize: 11, marginTop: 8 }}>
             {detail.error}
           </div>
         )}
-        {detail.messages.length === 0 && !detail.loading && !detail.error && (
+        {detail.unavailable && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 11, marginTop: 16, textAlign: 'center' }}>
+            {detail.unavailable}
+          </div>
+        )}
+        {detail.messages.length === 0 && !detail.loading && !detail.error && !detail.unavailable && (
           <div style={{ color: 'var(--fg-subtle)', fontSize: 11, marginTop: 16, textAlign: 'center' }}>
             no messages yet
           </div>

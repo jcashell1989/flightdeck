@@ -7,6 +7,12 @@ export interface SessionDetailResult {
   messages: MessageRecord[]
   loading: boolean
   error: string | null
+  /**
+   * Set when conversation replay is intentionally unavailable for this
+   * session (e.g. monitor-only claude-code sessions). Rendered by the
+   * Context Panel as a muted empty-state rather than an error.
+   */
+  unavailable: string | null
   refresh: () => void
 }
 
@@ -23,11 +29,13 @@ export function useSessionDetail(
 ): SessionDetailResult {
   const useMock = config?.mock.enabled ?? true
   const sessionId = session?.id ?? null
+  const agentType = session?.agentType ?? null
   const lastActivity = session?.lastActivity ?? 0
 
   const [messages, setMessages] = useState<MessageRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [unavailable, setUnavailable] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)
 
   const refresh = useCallback(() => setNonce((n) => n + 1), [])
@@ -36,6 +44,19 @@ export function useSessionDetail(
     if (!sessionId) {
       setMessages([])
       setError(null)
+      setUnavailable(null)
+      setLoading(false)
+      return
+    }
+
+    // Claude Code sessions are monitor-only: agentctl observes their state
+    // from ~/.claude/sessions/ but has no client that owns them, so the
+    // opencode:session:messages IPC path is meaningless and would throw.
+    // Short-circuit to a friendly empty state instead of hitting IPC.
+    if (agentType === 'claude-code') {
+      setMessages([])
+      setError(null)
+      setUnavailable('Monitor-only — conversation replay is not available for claude-code sessions.')
       setLoading(false)
       return
     }
@@ -43,9 +64,13 @@ export function useSessionDetail(
     if (useMock) {
       setMessages(mockMessages(sessionId))
       setError(null)
+      setUnavailable(null)
       setLoading(false)
       return
     }
+
+    // Clear monitor-only state from any previous session.
+    setUnavailable(null)
 
     const api = window.electronAPI?.opencode
     if (!api) {
@@ -87,7 +112,7 @@ export function useSessionDetail(
     // push signal), when mock mode flips, or on manual refresh.
     // messages intentionally excluded to avoid refetch loops.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, lastActivity, useMock, nonce])
+  }, [sessionId, agentType, lastActivity, useMock, nonce])
 
-  return { messages, loading, error, refresh }
+  return { messages, loading, error, unavailable, refresh }
 }

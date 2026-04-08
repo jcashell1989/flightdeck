@@ -37,7 +37,13 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
 
   safeHandle('opencode:session:messages', async (_e, sessionId: string) => {
     const client = opencodeRegistry.findClientForSession(sessionId)
-    if (!client) throw new Error(`no client owns session ${sessionId}`)
+    // Unknown sessions return an empty transcript rather than throwing.
+    // A stale sessionId rehydrated from persisted UI state (or a claude-code
+    // session id that slipped past the renderer's monitor-only guard) would
+    // otherwise spam the main log with handler errors on every refetch.
+    // Write-path handlers (prompt/respond/abort) still throw, because those
+    // imply a user action that should surface the failure.
+    if (!client) return []
     return client.fetchMessages(sessionId)
   })
 
