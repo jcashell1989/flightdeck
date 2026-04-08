@@ -155,9 +155,34 @@ No E2E framework until interaction surface stabilizes.
 
 ---
 
+## Phase 5 — Agent Profiles & Managed Instances
+
+**Ticket:** `td-be1f9c`
+
+**Goal:** agentctl launches and manages `opencode serve` processes on behalf of
+configured Agent Profiles. Users can run multiple opencode instances with
+different models (e.g. Claude Sonnet as primary, kimi-k2.5 as fallback) and
+select between them in the `⌘K` dispatch overlay.
+
+**Design:** See `docs/spec-fallback-agent.md` for full design. Summary:
+
+- **AgentProfile** — reusable env template (label, agentType, provider, model, apiKey, isDefault) stored in config.
+- **OpencodeLauncher** — spawns `opencode serve` with profile env vars, auto-assigns ports 4100–4200, polls until connectable, kills all on app quit.
+- **IPC:** `profile:list/add/update/delete`, `instance:dispatch` (launch + connect + createSession + sendPrompt).
+- **Settings UI:** Agent Profiles table (inline-edit, masked API key, default radio).
+- **⌘K overlay:** Profile dropdown; shows "starting agent…" while launcher works. Falls back to legacy path when no profiles configured.
+
+**Validation:**
+- Add a profile in Settings, dispatch via `⌘K` with that profile selected
+- `opencode serve` process appears on the correct port
+- Session card appears on dashboard
+- App quit kills all managed processes
+- `npm run typecheck` clean
+
+---
+
 ## Out of Scope (for now)
 
-- Fallback agent integration (`td-be1f9c` — deferred, low priority)
 - Enodios integration (deferred per research.md)
 - OS-level notifications (spec says in-app only)
 - Multi-machine / remote daemon mode
