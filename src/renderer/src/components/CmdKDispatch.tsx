@@ -181,7 +181,7 @@ export function CmdKDispatch({
       setBusy(false)
       setBusyLabel('dispatching…')
     }
-  }, [prompt, busy, target, useMock, selectedProfileId, history, onClose, onDispatched])
+  }, [prompt, busy, target, useMock, selectedProfileId, sessionMode, history, onClose, onDispatched])
 
   if (!open) return null
 

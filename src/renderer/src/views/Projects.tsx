@@ -453,7 +453,7 @@ export function Projects({ projects, config }: ProjectsProps) {
               >
                 {activeCount > 0 ? (
                   <span style={{ color: 'var(--status-running)' }}>
-                    \u25cf {activeCount} active
+                    ● {activeCount} active
                   </span>
                 ) : (
                   <span>{liveSessions.length} sessions</span>
@@ -483,8 +483,9 @@ export function Projects({ projects, config }: ProjectsProps) {
                     color: 'var(--fg-subtle)',
                     cursor: 'pointer'
                   }}
+                  aria-label="Project settings"
                 >
-                  \u2699
+                  ⚙
                 </button>
                 <button
                   onClick={() => handleArchive(project)}
@@ -531,7 +532,7 @@ export function Projects({ projects, config }: ProjectsProps) {
               marginBottom: 8
             }}
           >
-            <span>{archivedExpanded ? '\u25bc' : '\u25b6'}</span>
+            <span>{archivedExpanded ? '▼' : '▶'}</span>
             <span>Archived ({archivedProjects.length})</span>
           </button>
           {archivedExpanded && (

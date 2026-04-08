@@ -73,7 +73,11 @@ body {
   min-width: 0;
 }
 
-/* Show "+ New Session" button on project group header hover */
-.project-group-header:hover .new-session-btn {
+/* Show "+ New Session" button on project group header hover OR when
+ * any descendant (including the button itself) receives focus. The
+ * focus-visible rule ensures keyboard tab users can see and activate it. */
+.project-group-header:hover .new-session-btn,
+.project-group-header:focus-within .new-session-btn,
+.new-session-btn:focus-visible {
   opacity: 1 !important;
 }
