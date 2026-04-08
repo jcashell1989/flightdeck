@@ -83,9 +83,13 @@ function buildEnv(profile: AgentProfile): NodeJS.ProcessEnv {
     } else if (provider === 'google') {
       env['GOOGLE_API_KEY'] = profile.apiKey
     } else {
-      // Generic fallback — set all common key vars so the server can pick up
-      // whichever one it needs.
-      env['OPENROUTER_API_KEY'] = profile.apiKey
+      // Unknown provider — log a warning and do not set any key env var.
+      // Silently setting OPENROUTER_API_KEY for an unrecognised provider would
+      // pass the wrong key to the server and produce confusing auth errors.
+      console.warn(
+        `[launcher] unknown provider "${provider}" for profile "${profile.label}" — ` +
+          'no API key env var set. Add a provider mapping in launcher.ts if needed.'
+      )
     }
   }
 

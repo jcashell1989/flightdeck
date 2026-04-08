@@ -251,16 +251,23 @@ ipcMain.handle(
     // Ensure the registry has a connected client for this instance.
     const client = opencodeRegistry.ensureManagedClient(instance, managedKey)
 
-    // Wait briefly for the client to connect (it may be mid-handshake).
+    // Wait for the client to reach 'connected'. Use .on (not .once) so that
+    // intermediate 'reconnecting' or 'connecting' events don't consume the
+    // listener before 'connected' arrives.
     await new Promise<void>((resolve, reject) => {
       if (client.snapshot().status === 'connected') return resolve()
-      const timeout = setTimeout(() => reject(new Error('client connect timeout')), 8000)
-      client.once('status', (ev: { status: string }) => {
+      const timeout = setTimeout(() => {
+        client.off('status', onStatus)
+        reject(new Error('client connect timeout'))
+      }, 8000)
+      function onStatus(ev: { status: string }): void {
         if (ev.status === 'connected') {
           clearTimeout(timeout)
+          client.off('status', onStatus)
           resolve()
         }
-      })
+      }
+      client.on('status', onStatus)
     })
 
     const sessionId = await client.createSession(args.directory)

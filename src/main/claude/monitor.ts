@@ -18,7 +18,7 @@ import { promises as fs } from 'fs'
 import { join, basename } from 'path'
 import { homedir } from 'os'
 import { watch, FSWatcher } from 'chokidar'
-import { parseSessionState, projectName } from './parser'
+import { parseSessionState, projectName, encodeProjectPath } from './parser'
 import type { ClaudeSession, ClaudeProject, ClaudeSnapshot } from './types'
 
 const SESSIONS_DIR = join(homedir(), '.claude', 'sessions')
@@ -80,7 +80,7 @@ export class ClaudeMonitor extends EventEmitter {
     const projects: ClaudeProject[] = []
     for (const [path, sessions] of byPath) {
       projects.push({
-        encodedPath: path.replace(/\//g, '-').replace(/^-/, ''),
+        encodedPath: encodeProjectPath(path),
         path,
         name: projectName(path),
         sessions
@@ -258,7 +258,7 @@ export class ClaudeMonitor extends EventEmitter {
 
   private async findJsonlPath(sessionId: string, cwd: string): Promise<string | null> {
     // Primary: look in the project directory for this cwd.
-    const encoded = cwd.replace(/\//g, '-').replace(/^-/, '')
+    const encoded = encodeProjectPath(cwd)
     const projectDir = join(PROJECTS_DIR, encoded)
     const candidate = join(projectDir, `${sessionId}.jsonl`)
     try {
