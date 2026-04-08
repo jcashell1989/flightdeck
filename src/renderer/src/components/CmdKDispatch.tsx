@@ -1,5 +1,5 @@
 import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AppConfig, Project } from '../types'
+import { AgentProfile, AppConfig, Project } from '../types'
 
 interface CmdKDispatchProps {
   open: boolean
@@ -49,9 +49,25 @@ export function CmdKDispatch({
   const [targetPath, setTargetPath] = useState<string>('')
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory)
   const [busy, setBusy] = useState(false)
+  const [busyLabel, setBusyLabel] = useState('dispatching…')
   const [error, setError] = useState<string | null>(null)
+  const [profiles, setProfiles] = useState<AgentProfile[]>([])
+  const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const useMock = config?.mock.enabled ?? true
+
+  // Load opencode profiles on mount.
+  useEffect(() => {
+    const api = window.electronAPI?.profile
+    if (!api) return
+    void api.list().then((all) => {
+      const opencode = all.filter((p) => p.agentType === 'opencode')
+      setProfiles(opencode)
+      // Pre-select the default profile, or the first one.
+      const def = opencode.find((p) => p.isDefault) ?? opencode[0]
+      if (def) setSelectedProfileId(def.id)
+    })
+  }, [])
 
   // Only show projects that can receive opencode dispatches.
   // A project is dispatchable if it has at least one opencode session, or no
@@ -102,9 +118,22 @@ export function CmdKDispatch({
     try {
       if (useMock) {
         console.warn('[cmdk] mock mode — dispatch is a no-op', { target: target.path, text })
+      } else if (selectedProfileId) {
+        // Managed dispatch: launcher starts opencode serve if needed.
+        const api = window.electronAPI?.instance
+        if (!api) throw new Error('bridge unavailable')
+        setBusyLabel('starting agent…')
+        const res = await api.dispatch({
+          profileId: selectedProfileId,
+          directory: target.path,
+          prompt: text
+        })
+        onDispatched(res.sessionId)
       } else {
+        // Legacy path: use an already-running manually-configured instance.
         const api = window.electronAPI?.opencode
         if (!api) throw new Error('bridge unavailable')
+        setBusyLabel('dispatching…')
         const instanceKey = target.sessions[0]?.instanceKey
         const res = await api.createSession({
           instanceKey,
@@ -128,8 +157,9 @@ export function CmdKDispatch({
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
+      setBusyLabel('dispatching…')
     }
-  }, [prompt, busy, target, useMock, history, onClose, onDispatched])
+  }, [prompt, busy, target, useMock, selectedProfileId, history, onClose, onDispatched])
 
   if (!open) return null
 
@@ -236,7 +266,25 @@ export function CmdKDispatch({
               </option>
             ))}
           </select>
-          <span style={{ color: 'var(--fg-subtle)' }}>· opencode · New session</span>
+          {profiles.length > 0 ? (
+            <>
+              <span style={{ color: 'var(--fg-subtle)' }}>·</span>
+              <select
+                value={selectedProfileId}
+                onChange={(e) => setSelectedProfileId(e.target.value)}
+                style={selectStyle}
+              >
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}{p.isDefault ? ' (default)' : ''}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <span style={{ color: 'var(--fg-subtle)' }}>· opencode</span>
+          )}
+          <span style={{ color: 'var(--fg-subtle)' }}>· New session</span>
           {projects.length > dispatchableProjects.length && (
             <span
               title="Claude Code sessions are monitor-only and cannot receive dispatches"
@@ -315,7 +363,7 @@ export function CmdKDispatch({
             color: 'var(--fg-subtle)'
           }}
         >
-          ⌘↵ Send · Esc dismiss {busy && '· dispatching…'}
+          ⌘↵ Send · Esc dismiss {busy && `· ${busyLabel}`}
         </div>
       </div>
     </div>
