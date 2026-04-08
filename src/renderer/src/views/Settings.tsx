@@ -3,7 +3,7 @@ import { AgentProfile, AppConfig, OpencodeInstance } from '../types'
 
 interface SettingsProps {
   config: AppConfig | null
-  setConfig: (patch: Partial<AppConfig>) => Promise<void>
+  setConfig: (patch: Partial<AppConfig>) => Promise<boolean>
 }
 
 export function Settings({ config, setConfig }: SettingsProps) {

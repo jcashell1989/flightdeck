@@ -15,7 +15,7 @@ import { Settings } from './views/Settings'
 
 export function App() {
   useTheme()
-  const { config, setConfig } = useConfig()
+  const { config, setConfig, configError, clearConfigError } = useConfig()
   const { projects, connectionStatus } = useSessionService(config)
 
   const [activeView, setActiveView] = useState<View>('dashboard')
@@ -147,6 +147,40 @@ export function App() {
         {!fullScreen && <NavRail activeView={activeView} onViewChange={handleViewChange} />}
         {!fullScreen && (
           <div className="main-content">
+            {configError && (
+              <div
+                role="alert"
+                style={{
+                  background: 'var(--status-error-bg, rgba(176,80,80,0.12))',
+                  border: '1px solid var(--status-error, #b05050)',
+                  color: 'var(--status-error, #b05050)',
+                  borderRadius: 4,
+                  padding: '8px 12px',
+                  marginBottom: 12,
+                  fontSize: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12
+                }}
+              >
+                <span>Config error: {configError}</span>
+                <button
+                  onClick={clearConfigError}
+                  aria-label="Dismiss error"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    padding: 0
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            )}
             {activeView === 'dashboard' && (
               <Dashboard
                 projects={projects}
