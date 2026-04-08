@@ -24,7 +24,7 @@ ipcMain.handle('get-theme', () => {
 })
 
 ipcMain.handle('config:get', () => configStore.get())
-ipcMain.handle('config:set', (_e, patch: Partial<AppConfig>) => configStore.set(patch))
+ipcMain.handle('config:set', (_e, patch: unknown) => configStore.set(patch))
 
 ipcMain.handle('opencode:snapshot', () => opencodeRegistry.snapshot())
 
