@@ -345,6 +345,15 @@ function ProfileList() {
     [profiles]
   )
 
+  const [pendingDelete, setPendingDelete] = useState<AgentProfile | null>(null)
+
+  const requestDelete = useCallback((id: string) => {
+    const target = profiles.find((p) => p.id === id) ?? null
+    setPendingDelete(target)
+  }, [profiles])
+
+  const cancelDelete = useCallback(() => setPendingDelete(null), [])
+
   const handleDelete = useCallback(async (id: string) => {
     const api = window.electronAPI?.profile
     if (!api) return
@@ -407,12 +416,112 @@ function ProfileList() {
               profile={profile}
               onCommit={handleUpdate}
               onSetDefault={() => handleSetDefault(profile.id)}
-              onRemove={() => handleDelete(profile.id)}
+              onRemove={() => requestDelete(profile.id)}
             />
           ))}
           <ProfileAddRow onAdd={handleAdd} />
         </tbody>
       </table>
+      {pendingDelete && (
+        <ConfirmDialog
+          title={`Delete profile "${pendingDelete.label}"?`}
+          body="This will permanently remove the stored API key. This cannot be undone."
+          confirmLabel="Delete"
+          onCancel={cancelDelete}
+          onConfirm={async () => {
+            const id = pendingDelete.id
+            setPendingDelete(null)
+            await handleDelete(id)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function ConfirmDialog({
+  title,
+  body,
+  confirmLabel,
+  onCancel,
+  onConfirm
+}: {
+  title: string
+  body: string
+  confirmLabel: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onCancel}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--bg-elevated, #1b1b1b)',
+          border: '1px solid var(--border, #333)',
+          borderRadius: 6,
+          padding: 20,
+          minWidth: 320,
+          maxWidth: 480,
+          color: 'var(--fg, #eee)',
+          fontSize: 13
+        }}
+      >
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>{title}</div>
+        <div style={{ color: 'var(--fg-subtle)', marginBottom: 16 }}>{body}</div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button
+            onClick={onCancel}
+            style={{
+              padding: '6px 12px',
+              background: 'transparent',
+              color: 'var(--fg)',
+              border: '1px solid var(--border, #444)',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontSize: 12
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            autoFocus
+            style={{
+              padding: '6px 12px',
+              background: 'var(--status-error, #c33)',
+              color: '#fff',
+              border: '1px solid var(--status-error, #c33)',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 500
+            }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
