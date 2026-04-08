@@ -101,12 +101,19 @@ export function toNormalizedSession(
  * Group per-session states into one or more NormalizedProjects, keyed by
  * the opencode directory (one opencode server = one directory in practice,
  * but group defensively in case the schema ever splits projects).
+ *
+ * `clientKey` defaults to `${host}:${port}` for backward compat, but the
+ * registry passes a key that may include a `managed:` prefix when the client
+ * is a launcher-spawned instance. This prevents projectId collisions between
+ * a configured instance and a managed instance on the same host:port, which
+ * would otherwise produce duplicate React keys in the renderer.
  */
 export function groupIntoProjects(
   states: Iterable<InternalSessionState>,
-  instance: OpencodeInstance
+  instance: OpencodeInstance,
+  clientKey: string = `${instance.host}:${instance.port}`
 ): NormalizedProject[] {
-  const instanceKey = `${instance.host}:${instance.port}`
+  const instanceKey = clientKey
   const byDir = new Map<string, InternalSessionState[]>()
   for (const s of states) {
     const dir = s.meta.directory

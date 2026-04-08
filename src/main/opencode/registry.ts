@@ -28,6 +28,14 @@ export class OpencodeRegistry extends EventEmitter {
   private clients = new Map<string, OpencodeInstanceClient>()
   private disposed = false
   private claudeMonitor: ClaudeMonitor | null = null
+  /**
+   * Serialises sync() calls. Rapid back-to-back config changes (e.g. the
+   * user mashing "save" in Settings) used to race and leak clients because
+   * the second pass could overwrite a map entry while the first pass was
+   * still constructing the previous one. All sync() callers now chain onto
+   * this promise.
+   */
+  private syncChain: Promise<void> = Promise.resolve()
 
   /** Wire in the Claude Code monitor. Call before start(). */
   setClaudeMonitor(monitor: ClaudeMonitor): void {
@@ -37,8 +45,22 @@ export class OpencodeRegistry extends EventEmitter {
 
   start(): void {
     const cfg = configStore.get()
+    // First sync runs synchronously so start() returning implies clients are
+    // constructed. Subsequent syncs (triggered by config-change events) go
+    // through enqueueSync which serialises them.
     this.sync(cfg)
     configStore.on('change', this.handleConfigChange)
+  }
+
+  private enqueueSync(cfg: AppConfig): void {
+    this.syncChain = this.syncChain
+      .then(() => {
+        if (this.disposed) return
+        return this.sync(cfg)
+      })
+      .catch((err) => {
+        console.error('[OpencodeRegistry] sync failed:', err)
+      })
   }
 
   dispose(): void {
@@ -87,7 +109,7 @@ export class OpencodeRegistry extends EventEmitter {
     const existing = this.clients.get(managedKey)
     if (existing) return existing
 
-    const client = new OpencodeInstanceClient(instance)
+    const client = new OpencodeInstanceClient(instance, managedKey)
     client.on('change', () => this.emit('change'))
     client.on('status', () => this.emit('change'))
     this.clients.set(managedKey, client)
@@ -170,7 +192,7 @@ export class OpencodeRegistry extends EventEmitter {
 
   private handleConfigChange = (cfg: AppConfig): void => {
     if (this.disposed) return
-    this.sync(cfg)
+    this.enqueueSync(cfg)
   }
 
   private sync(cfg: AppConfig): void {
@@ -194,10 +216,12 @@ export class OpencodeRegistry extends EventEmitter {
       }
     }
 
-    // Add missing clients.
+    // Add missing clients. Pass the map key as the clientKey so managed and
+    // configured instances on the same host:port never produce colliding
+    // projectIds in snapshots.
     for (const [key, inst] of desired) {
       if (!this.clients.has(key)) {
-        const client = new OpencodeInstanceClient(inst)
+        const client = new OpencodeInstanceClient(inst, key)
         client.on('change', () => this.emit('change'))
         client.on('status', () => this.emit('change'))
         this.clients.set(key, client)

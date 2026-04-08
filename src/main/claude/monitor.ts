@@ -62,9 +62,22 @@ export class ClaudeMonitor extends EventEmitter {
 
   dispose(): void {
     this.disposed = true
-    void this.sessionsWatcher?.close()
-    void this.projectsWatcher?.close()
+    // chokidar close() returns a promise; attach a catch so a rejection can't
+    // become an unhandled rejection later. We do NOT await here because
+    // dispose() is called synchronously from before-quit; the disposed flag
+    // guards any handler that fires during the close window.
+    this.sessionsWatcher?.close().catch((err) => {
+      console.error('[ClaudeMonitor] sessions watcher close error:', err)
+    })
+    this.projectsWatcher?.close().catch((err) => {
+      console.error('[ClaudeMonitor] projects watcher close error:', err)
+    })
+    this.sessionsWatcher = null
+    this.projectsWatcher = null
     if (this.livenessTimer) clearInterval(this.livenessTimer)
+    this.livenessTimer = null
+    this.processes.clear()
+    this.sessions.clear()
     this.removeAllListeners()
   }
 
@@ -116,6 +129,7 @@ export class ClaudeMonitor extends EventEmitter {
   }
 
   private async loadProcessEntry(filePath: string): Promise<void> {
+    if (this.disposed) return
     try {
       const raw = await fs.readFile(filePath, 'utf8')
       const data = JSON.parse(raw) as {
@@ -132,6 +146,7 @@ export class ClaudeMonitor extends EventEmitter {
       ) {
         return
       }
+      if (this.disposed) return
       const entry: ProcessEntry = {
         pid: data.pid,
         sessionId: data.sessionId,

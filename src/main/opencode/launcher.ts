@@ -196,8 +196,23 @@ export class OpencodeLauncher extends EventEmitter {
       this.emit('error', { profileId: profile.id, directory, port, error: err })
     })
 
+    // Race waitForServer against the child exiting. If the port was stolen
+    // between isPortFree and spawn (TOCTOU), the child will fail to bind and
+    // exit quickly — we must treat that as failure rather than succeeding
+    // against whatever OTHER process happens to be listening on the port.
+    const earlyExit = new Promise<never>((_, reject) => {
+      const onExit = (code: number | null): void => {
+        reject(
+          new Error(
+            `opencode serve exited before becoming ready (code ${code ?? 'null'}) — ` +
+              `port ${port} may have been taken by another process`
+          )
+        )
+      }
+      child.once('exit', onExit)
+    })
     try {
-      await waitForServer(port, STARTUP_TIMEOUT_MS)
+      await Promise.race([waitForServer(port, STARTUP_TIMEOUT_MS), earlyExit])
     } catch (err) {
       // Server didn't start. Kill it properly (SIGTERM → SIGKILL grace) and
       // let the 'exit' handler above remove it from the instances map. We

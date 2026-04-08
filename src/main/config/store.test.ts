@@ -142,6 +142,29 @@ describe('validatePatch', () => {
     )
   })
 
+  it('rejects project with relative path', () => {
+    expect(() => validatePatch({ projects: [{ path: 'foo/bar', archived: false }] })).toThrow(
+      'must be absolute'
+    )
+  })
+
+  it('rejects project with NUL byte in path', () => {
+    expect(() =>
+      validatePatch({ projects: [{ path: '/foo\0bar', archived: false }] })
+    ).toThrow('NUL bytes')
+  })
+
+  it('rejects duplicate project paths', () => {
+    expect(() =>
+      validatePatch({
+        projects: [
+          { path: '/foo', archived: false },
+          { path: '/foo', archived: true }
+        ]
+      })
+    ).toThrow('duplicate project path')
+  })
+
   // ── profiles ──────────────────────────────────────────────────────────
 
   it('accepts a valid profiles patch', () => {
@@ -203,6 +226,25 @@ describe('validatePatch', () => {
         profiles: [{ id: 'x', label: 'x', agentType: 'opencode', isDefault: false, apiKey: 123 }]
       })
     ).toThrow('profile apiKey must be a string')
+  })
+
+  it('rejects duplicate profile ids', () => {
+    expect(() =>
+      validatePatch({
+        profiles: [
+          { id: 'same', label: 'a', agentType: 'opencode', isDefault: true },
+          { id: 'same', label: 'b', agentType: 'opencode', isDefault: false }
+        ]
+      })
+    ).toThrow('duplicate profile id')
+  })
+
+  it('rejects profile with empty id', () => {
+    expect(() =>
+      validatePatch({
+        profiles: [{ id: '', label: 'x', agentType: 'opencode', isDefault: true }]
+      })
+    ).toThrow('non-empty string')
   })
 
   it('accepts profile with undefined optional fields', () => {

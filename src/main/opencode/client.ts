@@ -54,8 +54,23 @@ export class OpencodeInstanceClient extends EventEmitter {
   // Buffer for events that arrive between openEventStream() and hydrate()
   // completion. While non-null, applyEvent is deferred.
   private eventBuffer: SdkEvent[] | null = null
+  // Named-event SSE listeners, kept so closeEventStream can detach them
+  // before closing the underlying EventSource.
+  private namedListeners = new Map<string, (ev: MessageEvent) => void>()
 
-  constructor(public readonly instance: OpencodeInstance) {
+  /**
+   * @param instance host/port/label tuple
+   * @param clientKey the registry-level key identifying this client
+   *                  (e.g. "127.0.0.1:4096" for configured instances, or
+   *                  "managed:<profileId>:<directory>" for launcher-spawned
+   *                  ones). Used to stamp projectId/instanceKey in snapshots
+   *                  so managed and configured instances on the same
+   *                  host:port do not collide in React keys.
+   */
+  constructor(
+    public readonly instance: OpencodeInstance,
+    public readonly clientKey: string = `${instance.host}:${instance.port}`
+  ) {
     super()
     this.baseUrl = `http://${instance.host}:${instance.port}`
     this.sdk = createOpencodeClient({ baseUrl: this.baseUrl })
@@ -86,10 +101,7 @@ export class OpencodeInstanceClient extends EventEmitter {
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err)
       this.eventBuffer = null
-      if (this.es) {
-        this.es.close()
-        this.es = null
-      }
+      this.closeEventStream()
       this.setStatus('error')
       this.scheduleReconnect()
     }
@@ -101,10 +113,7 @@ export class OpencodeInstanceClient extends EventEmitter {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
-    if (this.es) {
-      this.es.close()
-      this.es = null
-    }
+    this.closeEventStream()
     this.removeAllListeners()
   }
 
@@ -113,7 +122,7 @@ export class OpencodeInstanceClient extends EventEmitter {
       instance: this.instance,
       status: this.status,
       lastError: this.lastError,
-      projects: groupIntoProjects(this.sessions.values(), this.instance)
+      projects: groupIntoProjects(this.sessions.values(), this.instance, this.clientKey)
     }
   }
 
@@ -218,31 +227,58 @@ export class OpencodeInstanceClient extends EventEmitter {
     }
   }
 
-  private openEventStream(): void {
-    if (this.es) {
-      this.es.close()
-      this.es = null
+  private closeEventStream(): void {
+    const es = this.es
+    if (!es) return
+    // Detach all listeners BEFORE close() so that any events still in the
+    // browser's internal queue cannot fire handlers against a now-defunct
+    // ES instance after it has been nulled out. Without this, a late
+    // onerror could race post-dispose and call scheduleReconnect against
+    // a disposed client.
+    es.onmessage = null
+    es.onerror = null
+    es.onopen = null
+    const listeners = this.namedListeners
+    for (const [type, listener] of listeners) {
+      es.removeEventListener(type, listener)
     }
+    this.namedListeners.clear()
+    try {
+      es.close()
+    } catch {
+      // eventsource lib may throw if already closed — safe to ignore
+    }
+    this.es = null
+  }
+
+  private openEventStream(): void {
+    this.closeEventStream()
     const url = `${this.baseUrl}/event`
     const es = new EventSource(url)
     this.es = es
 
     // Default `message` event — opencode's standard frame.
-    es.onmessage = (ev: MessageEvent): void => this.handleRawEvent(ev.data)
+    es.onmessage = (ev: MessageEvent): void => {
+      if (this.disposed) return
+      this.handleRawEvent(ev.data)
+    }
 
     // Defensive: if the server emits `event: <type>\ndata: ...` (named SSE
     // events), onmessage will never fire. Register listeners for every
-    // known type so the client is robust to either framing style.
+    // known type so the client is robust to either framing style. Keep
+    // references so closeEventStream can detach them.
     for (const type of KNOWN_EVENT_TYPES) {
-      es.addEventListener(type, (ev: MessageEvent) => this.handleRawEvent(ev.data))
+      const listener = (ev: MessageEvent): void => {
+        if (this.disposed) return
+        this.handleRawEvent(ev.data)
+      }
+      es.addEventListener(type, listener)
+      this.namedListeners.set(type, listener)
     }
 
     es.onerror = (): void => {
       if (this.disposed) return
-      if (this.es) {
-        this.es.close()
-        this.es = null
-      }
+      this.closeEventStream()
       this.setStatus('reconnecting')
       this.scheduleReconnect()
     }

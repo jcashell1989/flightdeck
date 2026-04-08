@@ -66,7 +66,12 @@ export function register(): void {
         throw new Error('project already exists')
       }
       if (args.gitInit) {
-        await runCmd('git', ['init'], args.path)
+        const result = await runCmd('git', ['init'], args.path)
+        if (result.code !== 0) {
+          throw new Error(
+            `git init failed (exit ${result.code}): ${result.stderr.trim() || 'unknown error'}`
+          )
+        }
       }
       const project: ProjectConfig = {
         path: args.path,

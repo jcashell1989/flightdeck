@@ -79,10 +79,39 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
       _e,
       args: { instanceKey?: string; directory: string; prompt: string; title?: string }
     ) => {
-      const client = args.instanceKey
+      const maybeClient = args.instanceKey
         ? opencodeRegistry.findClientByKey(args.instanceKey)
         : opencodeRegistry.firstClient()
-      if (!client) throw new Error('no opencode client available')
+      if (!maybeClient) throw new Error('no opencode client available')
+      const client = maybeClient
+
+      // Wait for the client to reach 'connected' before creating a session —
+      // otherwise createSession can race the hydrate window and the resulting
+      // session id may not show up in the next SSE snapshot immediately, or
+      // the HTTP request can fail against a still-initialising server.
+      // Uses .on (not .once) so intermediate 'reconnecting'/'connecting'
+      // events don't consume the listener before 'connected' arrives.
+      if (client.snapshot().status !== 'connected') {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            client.off('status', onStatus)
+            reject(new Error('opencode client connect timeout'))
+          }, 8000)
+          function onStatus(ev: { status: string }): void {
+            if (ev.status === 'connected') {
+              clearTimeout(timeout)
+              client.off('status', onStatus)
+              resolve()
+            } else if (ev.status === 'error') {
+              clearTimeout(timeout)
+              client.off('status', onStatus)
+              reject(new Error('opencode client error'))
+            }
+          }
+          client.on('status', onStatus)
+        })
+      }
+
       const id = await client.createSession(args.directory, args.title)
       await client.sendPrompt(id, args.prompt)
       return { sessionId: id }

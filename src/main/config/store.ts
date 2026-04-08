@@ -260,14 +260,26 @@ export function validatePatch(patch: unknown): Partial<AppConfig> {
     if (!Array.isArray(p['projects'])) {
       throw new Error('invalid config patch: projects must be an array')
     }
+    const seenPaths = new Set<string>()
     for (const proj of p['projects'] as unknown[]) {
       if (typeof proj !== 'object' || proj === null) {
         throw new Error('invalid config patch: each project must be an object')
       }
       const pr = proj as Record<string, unknown>
-      if (typeof pr['path'] !== 'string') {
+      const path = pr['path']
+      if (typeof path !== 'string') {
         throw new Error('invalid config patch: project path must be a string')
       }
+      if (!path.startsWith('/')) {
+        throw new Error(`invalid config patch: project path must be absolute: "${path}"`)
+      }
+      if (path.includes('\0')) {
+        throw new Error('invalid config patch: project path must not contain NUL bytes')
+      }
+      if (seenPaths.has(path)) {
+        throw new Error(`invalid config patch: duplicate project path "${path}"`)
+      }
+      seenPaths.add(path)
       if (typeof pr['archived'] !== 'boolean') {
         throw new Error('invalid config patch: project archived must be a boolean')
       }
@@ -278,14 +290,20 @@ export function validatePatch(patch: unknown): Partial<AppConfig> {
     if (!Array.isArray(p['profiles'])) {
       throw new Error('invalid config patch: profiles must be an array')
     }
+    const seenIds = new Set<string>()
     for (const prof of p['profiles'] as unknown[]) {
       if (typeof prof !== 'object' || prof === null) {
         throw new Error('invalid config patch: each profile must be an object')
       }
       const pr = prof as Record<string, unknown>
-      if (typeof pr['id'] !== 'string') {
-        throw new Error('invalid config patch: profile id must be a string')
+      const id = pr['id']
+      if (typeof id !== 'string' || id.length === 0) {
+        throw new Error('invalid config patch: profile id must be a non-empty string')
       }
+      if (seenIds.has(id)) {
+        throw new Error(`invalid config patch: duplicate profile id "${id}"`)
+      }
+      seenIds.add(id)
       if (typeof pr['label'] !== 'string') {
         throw new Error('invalid config patch: profile label must be a string')
       }
