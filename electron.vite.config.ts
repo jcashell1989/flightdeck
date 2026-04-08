@@ -2,10 +2,10 @@ import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
-// @opencode-ai/sdk and eventsource are ESM-only. Electron main is CJS-output
-// by default, so we bundle these two inline instead of externalizing them —
-// avoids runtime require(ESM) fragility.
-const BUNDLED_MAIN_DEPS = ['@opencode-ai/sdk', 'eventsource']
+// @opencode-ai/sdk, eventsource, and chokidar are ESM-only. Electron main is
+// CJS-output by default, so we bundle these inline instead of externalizing
+// them — avoids runtime require(ESM) fragility.
+const BUNDLED_MAIN_DEPS = ['@opencode-ai/sdk', 'eventsource', 'chokidar']
 
 export default defineConfig({
   main: {
