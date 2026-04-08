@@ -50,9 +50,16 @@ export interface OpencodeInstance {
   label?: string
 }
 
+export interface ProjectConfig {
+  path: string
+  name?: string
+  archived: boolean
+}
+
 export interface AppConfig {
   opencode: { instances: OpencodeInstance[] }
   mock: { enabled: boolean }
+  projects: ProjectConfig[]
 }
 
 export type ConnectionStatus = 'disabled' | 'connecting' | 'connected' | 'reconnecting' | 'error'

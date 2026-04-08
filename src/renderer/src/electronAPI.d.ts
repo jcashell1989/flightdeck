@@ -64,6 +64,14 @@ export interface ElectronAPI {
     getDiff: (path: string) => Promise<ProcessResult>
     getTodo: (path: string) => Promise<ProcessResult>
   }
+  project: {
+    validate: (path: string) => Promise<{ valid: boolean; reason?: string; isGitRepo?: boolean }>
+    browse: () => Promise<string | null>
+    add: (args: { path: string; name?: string; gitInit?: boolean }) => Promise<{ ok: boolean }>
+    archive: (path: string) => Promise<{ ok: boolean }>
+    restore: (path: string) => Promise<{ ok: boolean }>
+    delete: (path: string) => Promise<{ ok: boolean }>
+  }
 }
 
 declare global {

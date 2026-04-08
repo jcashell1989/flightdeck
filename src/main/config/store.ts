@@ -9,14 +9,25 @@ export interface OpencodeInstance {
   label?: string
 }
 
+export interface ProjectConfig {
+  /** Absolute path to the project directory */
+  path: string
+  /** Optional display name override (defaults to last path segment) */
+  name?: string
+  /** Soft-deleted projects are hidden from the dashboard but preserved */
+  archived: boolean
+}
+
 export interface AppConfig {
   opencode: { instances: OpencodeInstance[] }
   mock: { enabled: boolean }
+  projects: ProjectConfig[]
 }
 
 const DEFAULT_CONFIG: AppConfig = {
   opencode: { instances: [{ host: '127.0.0.1', port: 4096, label: 'local' }] },
-  mock: { enabled: true }
+  mock: { enabled: true },
+  projects: []
 }
 
 class ConfigStore extends EventEmitter {
@@ -58,7 +69,8 @@ class ConfigStore extends EventEmitter {
     // small; revisit if any section grows independently mutable fields.
     return {
       opencode: patch.opencode ?? base.opencode,
-      mock: patch.mock ?? base.mock
+      mock: patch.mock ?? base.mock,
+      projects: patch.projects ?? base.projects
     }
   }
 
