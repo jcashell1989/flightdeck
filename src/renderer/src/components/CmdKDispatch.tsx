@@ -121,6 +121,20 @@ export function CmdKDispatch({
     setSessionMode('new')
   }, [targetPath])
 
+  // If the selected append target disappears from the snapshot (session
+  // completed, aborted, etc.) fall back to 'new' so the dropdown doesn't
+  // hold an orphaned id that would dispatch to nothing.
+  useEffect(() => {
+    if (sessionMode === 'new') return
+    const stillThere = target?.sessions.some(
+      (s) =>
+        s.id === sessionMode &&
+        s.agentType === 'opencode' &&
+        (s.state === 'running' || s.state === 'idle' || s.state === 'question')
+    )
+    if (!stillThere) setSessionMode('new')
+  }, [target, sessionMode])
+
   const dispatch = useCallback(async () => {
     const text = prompt.trim()
     if (!text || busy) return
@@ -174,7 +188,12 @@ export function CmdKDispatch({
       const next = [entry, ...history.filter((h) => h.prompt !== text)].slice(0, HISTORY_MAX)
       setHistory(next)
       saveHistory(next)
+      // Reset busy state BEFORE onClose() so a late setState can't warn
+      // about being called on an unmounted component.
+      setBusy(false)
+      setBusyLabel('dispatching…')
       onClose()
+      return
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {

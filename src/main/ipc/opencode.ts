@@ -119,12 +119,12 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
   )
 
   safeHandle('opencode:diff', async (_e, path: string) => {
-    if (!validPath(path)) return { stdout: '', stderr: 'invalid path', code: 1 }
+    if (!validPath(path)) throw new Error('invalid path')
     return runCmd('git', ['-C', path, 'diff', '--no-color'], path)
   })
 
   safeHandle('opencode:todo', async (_e, path: string) => {
-    if (!validPath(path)) return { stdout: '', stderr: 'invalid path', code: 1 }
+    if (!validPath(path)) throw new Error('invalid path')
     return runCmd('td', ['usage', '-q', '-w', path], path)
   })
 

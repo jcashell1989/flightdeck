@@ -170,12 +170,23 @@ function ConversationTab({
   const [sendError, setSendError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
-  // Auto-scroll to bottom when new messages land.
+  // Auto-scroll to bottom when new messages land OR when streaming tokens
+  // extend the last message. Depending only on messages.length misses
+  // incremental growth of the last message's content.
+  const lastMessageFingerprint = useMemo(() => {
+    const last = detail.messages[detail.messages.length - 1]
+    if (!last) return ''
+    const textLen = last.parts.reduce((n, p) => {
+      const t = (p as { text?: string }).text
+      return n + (typeof t === 'string' ? t.length : 0)
+    }, 0)
+    return `${detail.messages.length}:${last.parts.length}:${textLen}`
+  }, [detail.messages])
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     el.scrollTop = el.scrollHeight
-  }, [detail.messages.length])
+  }, [lastMessageFingerprint])
 
   const canReply =
     !useMock &&
@@ -611,7 +622,7 @@ function DiffTab({ project, useMock }: { project: Project | null; useMock: boole
         >
           {files.map((f) => (
             <button
-              key={f.filename}
+              key={`${f.startLine}:${f.filename}`}
               onClick={() => setSelectedFile(f.filename)}
               style={{
                 display: 'block',

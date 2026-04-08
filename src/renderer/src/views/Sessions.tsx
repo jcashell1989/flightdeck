@@ -61,9 +61,11 @@ export function Sessions({ projects, onSessionClick }: SessionsProps) {
               }}
               style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
             >
-              <td style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <StatusDot state={s.state} />
-                <span style={{ color: `var(--status-${s.state})` }}>{STATUS_LABELS[s.state]}</span>
+              <td style={{ padding: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <StatusDot state={s.state} />
+                  <span style={{ color: `var(--status-${s.state})` }}>{STATUS_LABELS[s.state]}</span>
+                </div>
               </td>
               <td style={{ padding: '8px', color: 'var(--fg-muted)' }}>{s.agentType}</td>
               <td className="mono" style={{ padding: '8px', color: 'var(--fg-subtle)' }} title={s.id}>#{s.id.slice(-4)}</td>

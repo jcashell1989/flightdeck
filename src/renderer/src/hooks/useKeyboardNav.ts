@@ -76,6 +76,9 @@ export function useKeyboardNav(opts: UseKeyboardNavOptions): void {
           o.onToggleFullScreen()
           break
         case 'Enter':
+          // preventDefault so a focused <button> (e.g. NavRail item) doesn't
+          // double-fire as both keydown-Enter and a synthetic click.
+          e.preventDefault()
           o.onEnter()
           break
         case 'a':

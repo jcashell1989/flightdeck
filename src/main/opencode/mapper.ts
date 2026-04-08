@@ -209,8 +209,12 @@ export function applyEvent(
     case 'permission.updated': {
       // Per SDK types.gen.d.ts:386, EventPermissionUpdated.properties IS the
       // Permission object directly (not wrapped). Verified against
-      // @opencode-ai/sdk@1.3.17.
-      const perm: SdkPermission = event.properties
+      // @opencode-ai/sdk@1.3.17. Still guard against malformed payloads
+      // because SDK events are untyped at the wire.
+      const perm = event.properties as SdkPermission | undefined
+      if (!perm || typeof perm.sessionID !== 'string' || typeof perm.id !== 'string') {
+        return false
+      }
       const s = states.get(perm.sessionID)
       if (!s) return false
       s.pendingPermissions.set(perm.id, perm)

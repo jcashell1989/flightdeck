@@ -56,7 +56,9 @@ function createWindow(): void {
   const themeHandler = (): void => {
     if (win.isDestroyed()) return
     const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
-    win.webContents.send('theme-changed', theme)
+    // Use the central broadcast helper so every webContents receives the
+    // update — win.webContents.send only targets the closed-over window.
+    broadcast('theme-changed', theme)
   }
   nativeTheme.on('updated', themeHandler)
   win.on('closed', () => {

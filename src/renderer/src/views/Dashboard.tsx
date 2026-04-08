@@ -17,8 +17,10 @@ export function Dashboard({ projects, focusedSessionId, onSessionClick, onNewSes
       const bAttention = b.sessions.some((s) => isAttention(s.state))
       if (aAttention && !bAttention) return -1
       if (!aAttention && bAttention) return 1
-      const aRecent = Math.max(...a.sessions.map((s) => s.lastActivity))
-      const bRecent = Math.max(...b.sessions.map((s) => s.lastActivity))
+      // Math.max(...[]) is -Infinity — clamp to 0 so a project with no
+      // sessions sorts to the bottom instead of producing NaN comparisons.
+      const aRecent = a.sessions.length === 0 ? 0 : Math.max(...a.sessions.map((s) => s.lastActivity))
+      const bRecent = b.sessions.length === 0 ? 0 : Math.max(...b.sessions.map((s) => s.lastActivity))
       return bRecent - aRecent
     })
   }, [projects])

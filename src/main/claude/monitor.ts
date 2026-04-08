@@ -55,6 +55,11 @@ export class ClaudeMonitor extends EventEmitter {
   private sessions = new Map<string, ClaudeSession>()
 
   start(): void {
+    // Ensure watch roots exist — on a fresh macOS install ~/.claude/sessions
+    // and ~/.claude/projects may not have been created yet, and chokidar
+    // silently fails to fire events on non-existent paths.
+    void fs.mkdir(SESSIONS_DIR, { recursive: true }).catch(() => undefined)
+    void fs.mkdir(PROJECTS_DIR, { recursive: true }).catch(() => undefined)
     this.watchSessions()
     this.watchProjects()
     this.startLivenessPoll()

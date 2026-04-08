@@ -16,6 +16,8 @@ import { basename } from 'path'
 import type { ClaudeSessionState } from './types'
 
 const TAIL_BYTES = 4096
+/** Upper bound on how much we'll read to find a parseable last line. */
+const MAX_TAIL_BYTES = 64 * 1024
 
 /** Tool name → human-readable action label */
 const TOOL_LABELS: Record<string, string> = {
@@ -50,7 +52,7 @@ export async function parseSessionState(
   jsonlPath: string,
   fallbackTimestamp: number
 ): Promise<ParseResult | null> {
-  let raw: string
+  let entries: Array<{ type: string; [k: string]: unknown }> = []
   try {
     const stat = await fs.stat(jsonlPath)
     const fileSize = stat.size
@@ -60,31 +62,39 @@ export async function parseSessionState(
 
     const fd = await fs.open(jsonlPath, 'r')
     try {
-      const readSize = Math.min(TAIL_BYTES, fileSize)
-      const offset = fileSize - readSize
-      const buf = Buffer.alloc(readSize)
-      await fd.read(buf, 0, readSize, offset)
-      raw = buf.toString('utf8')
+      // Grow the read window if the *last* line fails to parse — a single
+      // very long message can straddle the 4KB boundary and starve us of the
+      // most recent state signal otherwise. Cap at MAX_TAIL_BYTES so we don't
+      // slurp unbounded history.
+      let readSize = Math.min(TAIL_BYTES, fileSize)
+      for (;;) {
+        const offset = fileSize - readSize
+        const buf = Buffer.alloc(readSize)
+        await fd.read(buf, 0, readSize, offset)
+        const raw = buf.toString('utf8')
+        const lines = raw.split('\n').filter((l) => l.trim().length > 0)
+        // Drop the first line if we didn't read from the start of the file —
+        // it may be partial and was just truncated mid-JSON.
+        if (offset > 0 && lines.length > 0) lines.shift()
+
+        entries = []
+        let lastLineOk = true
+        for (let i = 0; i < lines.length; i++) {
+          try {
+            entries.push(JSON.parse(lines[i]))
+          } catch {
+            if (i === lines.length - 1) lastLineOk = false
+          }
+        }
+
+        if (lastLineOk || readSize >= MAX_TAIL_BYTES || readSize >= fileSize) break
+        readSize = Math.min(readSize * 4, MAX_TAIL_BYTES, fileSize)
+      }
     } finally {
       await fd.close()
     }
   } catch {
     return null
-  }
-
-  // Split into lines, drop the first (possibly partial) line if we didn't
-  // read from the start of the file.
-  const lines = raw.split('\n').filter((l) => l.trim().length > 0)
-  if (lines.length > 1) lines.shift() // drop potentially partial first line
-
-  // Parse lines, ignoring malformed JSON.
-  const entries: Array<{ type: string; [k: string]: unknown }> = []
-  for (const line of lines) {
-    try {
-      entries.push(JSON.parse(line))
-    } catch {
-      // skip malformed
-    }
   }
 
   if (entries.length === 0) {

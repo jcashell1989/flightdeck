@@ -331,6 +331,13 @@ class ConfigStore extends EventEmitter {
   private config: AppConfig = DEFAULT_CONFIG
   private path: string = ''
   private loaded = false
+
+  constructor() {
+    super()
+    // Test hot-reload can register many ephemeral listeners; raise the cap
+    // so we don't trip MaxListenersExceededWarning in noisy suites.
+    this.setMaxListeners(50)
+  }
   /**
    * profileId → base64 safeStorage ciphertext, populated on load and on every
    * successful encrypt. Reserved as the fallback source of ciphertext when

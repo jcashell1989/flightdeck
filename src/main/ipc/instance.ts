@@ -36,6 +36,10 @@ export function register(): void {
             clearTimeout(timeout)
             client.off('status', onStatus)
             resolve()
+          } else if (ev.status === 'error') {
+            clearTimeout(timeout)
+            client.off('status', onStatus)
+            reject(new Error('opencode client error'))
           }
         }
         client.on('status', onStatus)

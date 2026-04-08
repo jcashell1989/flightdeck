@@ -48,7 +48,9 @@ function tintStyle(state: SessionState): string | undefined {
 }
 
 function formatElapsed(ms: number): string {
-  const sec = Math.floor(ms / 1000)
+  // Clamp to 0: a session.startedAt in the future (clock skew, future-dated
+  // mock data) would otherwise render as "-5s".
+  const sec = Math.max(0, Math.floor(ms / 1000))
   if (sec < 60) return `${sec}s`
   const min = Math.floor(sec / 60)
   if (min < 60) return `${min}m`
