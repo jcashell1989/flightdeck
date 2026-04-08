@@ -56,10 +56,21 @@ export interface ProjectConfig {
   archived: boolean
 }
 
+export interface AgentProfile {
+  id: string
+  label: string
+  agentType: 'opencode' | 'claude-code'
+  provider?: string
+  model?: string
+  apiKey?: string
+  isDefault: boolean
+}
+
 export interface AppConfig {
   opencode: { instances: OpencodeInstance[] }
   mock: { enabled: boolean }
   projects: ProjectConfig[]
+  profiles: AgentProfile[]
 }
 
 export type ConnectionStatus = 'disabled' | 'connecting' | 'connected' | 'reconnecting' | 'error'

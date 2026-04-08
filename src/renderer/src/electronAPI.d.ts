@@ -1,4 +1,4 @@
-import { AppConfig, Session, Project } from './types'
+import { AppConfig, AgentProfile, Session, Project } from './types'
 
 export interface OpencodeSnapshotPayload {
   projects: Project[]
@@ -71,6 +71,19 @@ export interface ElectronAPI {
     archive: (path: string) => Promise<{ ok: boolean }>
     restore: (path: string) => Promise<{ ok: boolean }>
     delete: (path: string) => Promise<{ ok: boolean }>
+  }
+  profile: {
+    list: () => Promise<AgentProfile[]>
+    add: (p: Omit<AgentProfile, 'id'>) => Promise<AgentProfile>
+    update: (p: AgentProfile) => Promise<AgentProfile>
+    delete: (id: string) => Promise<{ ok: boolean }>
+  }
+  instance: {
+    dispatch: (args: {
+      profileId: string
+      directory: string
+      prompt: string
+    }) => Promise<{ sessionId: string }>
   }
 }
 

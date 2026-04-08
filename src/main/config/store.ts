@@ -9,6 +9,26 @@ export interface OpencodeInstance {
   label?: string
 }
 
+export interface AgentProfile {
+  /** Stable UUID — never changes after creation */
+  id: string
+  /** Human-readable name shown in Settings and the dispatch overlay */
+  label: string
+  /** Agent type. Only 'opencode' profiles are dispatchable. */
+  agentType: 'opencode' | 'claude-code'
+  /** Provider identifier passed as OPENCODE_PROVIDER env var (e.g. 'openrouter', 'anthropic') */
+  provider?: string
+  /** Model identifier passed as OPENCODE_MODEL env var (e.g. 'openrouter/kimi-k2.5') */
+  model?: string
+  /**
+   * API key passed as the provider-specific env var on launch.
+   * Stored plaintext for now — keychain migration is a follow-up.
+   */
+  apiKey?: string
+  /** When true, this profile is pre-selected in the dispatch overlay */
+  isDefault: boolean
+}
+
 export interface ProjectConfig {
   /** Absolute path to the project directory */
   path: string
@@ -22,12 +42,14 @@ export interface AppConfig {
   opencode: { instances: OpencodeInstance[] }
   mock: { enabled: boolean }
   projects: ProjectConfig[]
+  profiles: AgentProfile[]
 }
 
 const DEFAULT_CONFIG: AppConfig = {
   opencode: { instances: [{ host: '127.0.0.1', port: 4096, label: 'local' }] },
   mock: { enabled: true },
-  projects: []
+  projects: [],
+  profiles: []
 }
 
 class ConfigStore extends EventEmitter {
@@ -70,7 +92,8 @@ class ConfigStore extends EventEmitter {
     return {
       opencode: patch.opencode ?? base.opencode,
       mock: patch.mock ?? base.mock,
-      projects: patch.projects ?? base.projects
+      projects: patch.projects ?? base.projects,
+      profiles: patch.profiles ?? base.profiles
     }
   }
 
