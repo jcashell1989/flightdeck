@@ -1,40 +1,15 @@
-import { AppConfig, AgentProfile, Session, Project } from './types'
+import type {
+  AgentProfile,
+  AppConfig,
+  MessageRecord,
+  OpencodeSnapshotPayload,
+  ProcessResult,
+  ProjectValidationResult
+} from './types'
 
-export interface OpencodeSnapshotPayload {
-  projects: Project[]
-  aggregateStatus: {
-    status: 'disabled' | 'connecting' | 'connected' | 'reconnecting' | 'error'
-    perInstance: Array<{
-      key: string
-      status: 'connecting' | 'connected' | 'reconnecting' | 'error'
-      lastError: string | null
-    }>
-  }
-}
-
-export interface ProcessResult {
-  stdout: string
-  stderr: string
-  code: number
-}
-
-export interface MessageRecord {
-  info: {
-    id: string
-    role: 'user' | 'assistant' | string
-    time?: { created: number }
-    [k: string]: unknown
-  }
-  parts: Array<{
-    id?: string
-    type: string
-    text?: string
-    filename?: string
-    tool?: string
-    state?: { status?: string; output?: string; input?: unknown }
-    [k: string]: unknown
-  }>
-}
+// Re-export for backward compat with earlier `import { MessageRecord } from '../electronAPI'`.
+// New code should import these directly from './types' → shared/types.
+export type { MessageRecord, OpencodeSnapshotPayload, ProcessResult }
 
 export interface ElectronAPI {
   getTheme: () => Promise<'dark' | 'light'>
@@ -65,7 +40,7 @@ export interface ElectronAPI {
     getTodo: (path: string) => Promise<ProcessResult>
   }
   project: {
-    validate: (path: string) => Promise<{ valid: boolean; reason?: string; isGitRepo?: boolean }>
+    validate: (path: string) => Promise<ProjectValidationResult>
     browse: () => Promise<string | null>
     add: (args: { path: string; name?: string; gitInit?: boolean }) => Promise<{ ok: boolean }>
     archive: (path: string) => Promise<{ ok: boolean }>

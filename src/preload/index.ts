@@ -1,80 +1,12 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
-
-export interface OpencodeInstance {
-  host: string
-  port: number
-  label?: string
-}
-
-export interface ProjectConfig {
-  path: string
-  name?: string
-  archived: boolean
-}
-
-export interface AgentProfile {
-  id: string
-  label: string
-  agentType: 'opencode' | 'claude-code'
-  provider?: string
-  model?: string
-  apiKey?: string
-  isDefault: boolean
-}
-
-export interface AppConfig {
-  opencode: { instances: OpencodeInstance[] }
-  mock: { enabled: boolean }
-  projects: ProjectConfig[]
-  profiles: AgentProfile[]
-}
-
-export interface PendingPermissionPayload {
-  id: string
-  type: string
-  title?: string
-  pattern?: string
-  command?: string
-  metadata: Record<string, unknown>
-}
-
-export interface OpencodeSnapshotPayload {
-  projects: Array<{
-    id: string
-    name: string
-    path: string
-    sessions: Array<{
-      id: string
-      agentType: 'opencode' | 'claude-code'
-      state: 'running' | 'idle' | 'approval' | 'question' | 'error'
-      currentAction: string
-      startedAt: number
-      lastActivity: number
-      projectId: string
-      instanceKey: string
-      pendingPermission?: PendingPermissionPayload | null
-    }>
-  }>
-  aggregateStatus: {
-    status: 'disabled' | 'connecting' | 'connected' | 'reconnecting' | 'error'
-    perInstance: Array<{
-      key: string
-      status: 'connecting' | 'connected' | 'reconnecting' | 'error'
-      lastError: string | null
-    }>
-  }
-}
-
-export interface ProcessResult {
-  stdout: string
-  stderr: string
-  code: number
-}
-
-export interface MessageRecord {
-  info: unknown
-  parts: unknown[]
-}
+import type {
+  AgentProfile,
+  AppConfig,
+  MessageRecord,
+  OpencodeSnapshotPayload,
+  ProcessResult,
+  ProjectValidationResult
+} from '../shared/types'
 
 contextBridge.exposeInMainWorld('electronAPI', {
   getTheme: (): Promise<'dark' | 'light'> => ipcRenderer.invoke('get-theme'),
@@ -121,7 +53,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getTodo: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('opencode:todo', path)
   },
   project: {
-    validate: (path: string): Promise<{ valid: boolean; reason?: string; isGitRepo?: boolean }> =>
+    validate: (path: string): Promise<ProjectValidationResult> =>
       ipcRenderer.invoke('project:validate', path),
     browse: (): Promise<string | null> => ipcRenderer.invoke('project:browse'),
     add: (args: { path: string; name?: string; gitInit?: boolean }): Promise<{ ok: boolean }> =>

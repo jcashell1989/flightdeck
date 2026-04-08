@@ -2,51 +2,16 @@ import { app, safeStorage } from 'electron'
 import { promises as fs } from 'fs'
 import { join, dirname } from 'path'
 import { EventEmitter } from 'events'
+import type {
+  AgentProfile,
+  AppConfig,
+  OpencodeInstance,
+  ProjectConfig
+} from '../../shared/types'
 
-export interface OpencodeInstance {
-  host: string
-  port: number
-  label?: string
-}
-
-export interface AgentProfile {
-  /** Stable UUID — never changes after creation */
-  id: string
-  /** Human-readable name shown in Settings and the dispatch overlay */
-  label: string
-  /** Agent type. Only 'opencode' profiles are dispatchable. */
-  agentType: 'opencode' | 'claude-code'
-  /** Provider identifier passed as OPENCODE_PROVIDER env var (e.g. 'openrouter', 'anthropic') */
-  provider?: string
-  /** Model identifier passed as OPENCODE_MODEL env var (e.g. 'openrouter/kimi-k2.5') */
-  model?: string
-  /**
-   * Decrypted API key — present in memory only, never written to disk.
-   * On disk the key is stored as `apiKeyEncrypted` (base64 safeStorage ciphertext).
-   * May be undefined if decryption failed on load OR if encryption is
-   * unavailable on this machine — the ciphertext is still preserved on disk
-   * via the shadow map, so re-saving the profile does not wipe the key.
-   */
-  apiKey?: string
-  /** When true, this profile is pre-selected in the dispatch overlay */
-  isDefault: boolean
-}
-
-export interface ProjectConfig {
-  /** Absolute path to the project directory */
-  path: string
-  /** Optional display name override (defaults to last path segment) */
-  name?: string
-  /** Soft-deleted projects are hidden from the dashboard but preserved */
-  archived: boolean
-}
-
-export interface AppConfig {
-  opencode: { instances: OpencodeInstance[] }
-  mock: { enabled: boolean }
-  projects: ProjectConfig[]
-  profiles: AgentProfile[]
-}
+// Re-export for backward compatibility with existing import paths.
+// New code should import directly from `src/shared/types`.
+export type { AgentProfile, AppConfig, OpencodeInstance, ProjectConfig }
 
 /**
  * On-disk shape for AgentProfile — apiKey is replaced by apiKeyEncrypted.
