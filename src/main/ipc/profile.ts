@@ -1,12 +1,12 @@
-import { ipcMain } from 'electron'
 import { configStore, AgentProfile } from '../config/store'
+import { safeHandle } from './_helpers'
 
 export function register(): void {
-  ipcMain.handle('profile:list', () => {
+  safeHandle('profile:list', () => {
     return configStore.get().profiles
   })
 
-  ipcMain.handle('profile:add', async (_e, p: Omit<AgentProfile, 'id'>) => {
+  safeHandle('profile:add', async (_e, p: Omit<AgentProfile, 'id'>) => {
     const id = crypto.randomUUID()
     const profile: AgentProfile = { ...p, id }
     const cfg = configStore.get()
@@ -14,14 +14,14 @@ export function register(): void {
     return profile
   })
 
-  ipcMain.handle('profile:update', async (_e, p: AgentProfile) => {
+  safeHandle('profile:update', async (_e, p: AgentProfile) => {
     const cfg = configStore.get()
     const profiles = cfg.profiles.map((existing) => (existing.id === p.id ? p : existing))
     await configStore.set({ profiles })
     return p
   })
 
-  ipcMain.handle('profile:delete', async (_e, id: string) => {
+  safeHandle('profile:delete', async (_e, id: string) => {
     const cfg = configStore.get()
     const profiles = cfg.profiles.filter((p) => p.id !== id)
     await configStore.set({ profiles })

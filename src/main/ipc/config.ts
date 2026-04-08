@@ -1,13 +1,17 @@
-import { ipcMain, nativeTheme } from 'electron'
+import { nativeTheme } from 'electron'
 import { configStore } from '../config/store'
+import { safeHandle } from './_helpers'
 
 export function register(broadcast: (channel: string, payload: unknown) => void): void {
-  ipcMain.handle('get-theme', () => {
+  safeHandle('get-theme', () => {
     return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
   })
 
-  ipcMain.handle('config:get', () => configStore.get())
-  ipcMain.handle('config:set', (_e, patch: unknown) => configStore.set(patch))
+  safeHandle('config:get', () => configStore.get())
+  safeHandle('config:set', (_e, patch: unknown) => configStore.set(patch))
 
+  // Remove any prior change listener before attaching a fresh one, so HMR
+  // re-registration doesn't stack up duplicate broadcasts.
+  configStore.removeAllListeners('change')
   configStore.on('change', (cfg) => broadcast('config-changed', cfg))
 }

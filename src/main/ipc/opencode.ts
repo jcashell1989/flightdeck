@@ -1,6 +1,6 @@
-import { ipcMain } from 'electron'
 import { execFile } from 'child_process'
 import { opencodeRegistry } from '../opencode/registry'
+import { safeHandle } from './_helpers'
 
 function runCmd(
   cmd: string,
@@ -33,15 +33,15 @@ function validPath(p: string): boolean {
 }
 
 export function register(broadcast: (channel: string, payload: unknown) => void): void {
-  ipcMain.handle('opencode:snapshot', () => opencodeRegistry.snapshot())
+  safeHandle('opencode:snapshot', () => opencodeRegistry.snapshot())
 
-  ipcMain.handle('opencode:session:messages', async (_e, sessionId: string) => {
+  safeHandle('opencode:session:messages', async (_e, sessionId: string) => {
     const client = opencodeRegistry.findClientForSession(sessionId)
     if (!client) throw new Error(`no client owns session ${sessionId}`)
     return client.fetchMessages(sessionId)
   })
 
-  ipcMain.handle(
+  safeHandle(
     'opencode:session:prompt',
     async (_e, sessionId: string, text: string) => {
       const client = opencodeRegistry.findClientForSession(sessionId)
@@ -51,7 +51,7 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
     }
   )
 
-  ipcMain.handle(
+  safeHandle(
     'opencode:session:respond',
     async (
       _e,
@@ -66,14 +66,14 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
     }
   )
 
-  ipcMain.handle('opencode:session:abort', async (_e, sessionId: string) => {
+  safeHandle('opencode:session:abort', async (_e, sessionId: string) => {
     const client = opencodeRegistry.findClientForSession(sessionId)
     if (!client) throw new Error(`no client owns session ${sessionId}`)
     await client.abortSession(sessionId)
     return { ok: true }
   })
 
-  ipcMain.handle(
+  safeHandle(
     'opencode:session:create',
     async (
       _e,
@@ -89,16 +89,18 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
     }
   )
 
-  ipcMain.handle('opencode:diff', async (_e, path: string) => {
+  safeHandle('opencode:diff', async (_e, path: string) => {
     if (!validPath(path)) return { stdout: '', stderr: 'invalid path', code: 1 }
     return runCmd('git', ['-C', path, 'diff', '--no-color'], path)
   })
 
-  ipcMain.handle('opencode:todo', async (_e, path: string) => {
+  safeHandle('opencode:todo', async (_e, path: string) => {
     if (!validPath(path)) return { stdout: '', stderr: 'invalid path', code: 1 }
     return runCmd('td', ['usage', '-q', '-w', path], path)
   })
 
+  // HMR safety: clear any prior listener before attaching a fresh one.
+  opencodeRegistry.removeAllListeners('change')
   opencodeRegistry.on('change', () => {
     broadcast('opencode:snapshot', opencodeRegistry.snapshot())
   })

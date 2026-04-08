@@ -1,8 +1,9 @@
-import { ipcMain, dialog } from 'electron'
+import { dialog } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import { execFile } from 'child_process'
 import { configStore, ProjectConfig } from '../config/store'
+import { safeHandle } from './_helpers'
 
 function runCmd(
   cmd: string,
@@ -31,7 +32,7 @@ function validPath(p: string): boolean {
 
 export function register(): void {
   /** Validate a project path and return its status. */
-  ipcMain.handle('project:validate', async (_e, path: string) => {
+  safeHandle('project:validate', async (_e, path: string) => {
     if (!validPath(path)) return { valid: false, reason: 'invalid path' }
     try {
       const stat = await fs.stat(path)
@@ -48,7 +49,7 @@ export function register(): void {
   })
 
   /** Open a native folder picker and return the selected path. */
-  ipcMain.handle('project:browse', async () => {
+  safeHandle('project:browse', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory', 'createDirectory']
     })
@@ -56,7 +57,7 @@ export function register(): void {
   })
 
   /** Add a project to the config. Optionally git-init the directory. */
-  ipcMain.handle(
+  safeHandle(
     'project:add',
     async (_e, args: { path: string; name?: string; gitInit?: boolean }) => {
       if (!validPath(args.path)) throw new Error('invalid path')
@@ -78,7 +79,7 @@ export function register(): void {
   )
 
   /** Archive (soft-delete) a project. */
-  ipcMain.handle('project:archive', async (_e, path: string) => {
+  safeHandle('project:archive', async (_e, path: string) => {
     if (!validPath(path)) throw new Error('invalid path')
     const cfg = configStore.get()
     const projects = cfg.projects.map((p) =>
@@ -89,7 +90,7 @@ export function register(): void {
   })
 
   /** Restore an archived project. */
-  ipcMain.handle('project:restore', async (_e, path: string) => {
+  safeHandle('project:restore', async (_e, path: string) => {
     if (!validPath(path)) throw new Error('invalid path')
     const cfg = configStore.get()
     const projects = cfg.projects.map((p) =>
@@ -100,7 +101,7 @@ export function register(): void {
   })
 
   /** Hard-delete a project from the config. */
-  ipcMain.handle('project:delete', async (_e, path: string) => {
+  safeHandle('project:delete', async (_e, path: string) => {
     if (!validPath(path)) throw new Error('invalid path')
     const cfg = configStore.get()
     const projects = cfg.projects.filter((p) => p.path !== path)

@@ -22,6 +22,45 @@ const PORT_RANGE_START = 4100
 const PORT_RANGE_END = 4200
 const STARTUP_TIMEOUT_MS = 10_000
 const STARTUP_POLL_MS = 500
+/** How long to give a child to exit gracefully after SIGTERM before SIGKILL. */
+const KILL_GRACE_MS = 2_000
+
+/**
+ * Send SIGTERM to a child, follow up with SIGKILL after a grace period if
+ * the child hasn't exited. Resolves once the child has actually exited (or
+ * was already gone). Never rejects.
+ */
+function killChild(child: ChildProcess, graceMs = KILL_GRACE_MS): Promise<void> {
+  if (child.exitCode !== null || child.killed) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve()
+    }
+    child.once('exit', finish)
+    try {
+      child.kill('SIGTERM')
+    } catch {
+      // Process may have died between the exitCode check and kill().
+      finish()
+      return
+    }
+    const timer = setTimeout(() => {
+      if (child.exitCode === null && !child.killed) {
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          // ignore — 'exit' will still fire or already has
+        }
+      }
+    }, graceMs)
+  })
+}
 
 interface ManagedEntry {
   process: ChildProcess
@@ -126,6 +165,19 @@ export class OpencodeLauncher extends EventEmitter {
       detached: false
     })
 
+    // Drain child stdio. Without this, the pipe buffers (~64KB) fill up and
+    // the child blocks on write — the opencode server will hang after it has
+    // logged enough output. stdout is silently flowed; stderr is tapped so
+    // operational errors surface in the main process console for debugging.
+    child.stdout?.resume()
+    child.stderr?.on('data', (buf: Buffer) => {
+      const line = buf.toString().trimEnd()
+      if (line) console.error(`[opencode:${profile.label}:${port}] ${line}`)
+    })
+    // If stderr has no data listener wired (e.g. mocked/null in tests), also
+    // resume it defensively so real servers never block on stderr backpressure.
+    child.stderr?.resume()
+
     const entry: ManagedEntry = {
       process: child,
       port,
@@ -147,9 +199,11 @@ export class OpencodeLauncher extends EventEmitter {
     try {
       await waitForServer(port, STARTUP_TIMEOUT_MS)
     } catch (err) {
-      // Server didn't start — kill the process and clean up.
-      child.kill('SIGTERM')
-      this.instances.delete(key)
+      // Server didn't start. Kill it properly (SIGTERM → SIGKILL grace) and
+      // let the 'exit' handler above remove it from the instances map. We
+      // intentionally do NOT delete the map entry here — doing so would
+      // leak the process if SIGTERM is ignored and SIGKILL is still pending.
+      void killChild(child)
       throw err
     }
 
@@ -157,21 +211,63 @@ export class OpencodeLauncher extends EventEmitter {
     return port
   }
 
-  /** Stop a specific managed instance. No-op if not running. */
+  /**
+   * Stop a specific managed instance (fire-and-forget). Sends SIGTERM and
+   * relies on the child's 'exit' handler to remove the map entry. For a
+   * version that waits for actual termination, use stopAsync.
+   */
   stop(profileId: string, directory: string): void {
     const key = instanceKey(profileId, directory)
     const entry = this.instances.get(key)
     if (!entry) return
     entry.process.kill('SIGTERM')
-    this.instances.delete(key)
+    // Do NOT delete here — let the 'exit' handler do it so SIGKILL escalation
+    // remains possible via stopAsync.
   }
 
-  /** Stop all managed instances. Called on app quit. */
+  /** Stop a specific instance and wait for it to actually exit. */
+  async stopAsync(profileId: string, directory: string): Promise<void> {
+    const key = instanceKey(profileId, directory)
+    const entry = this.instances.get(key)
+    if (!entry) return
+    await killChild(entry.process)
+  }
+
+  /**
+   * Stop all managed instances (fire-and-forget, sync). Kept for legacy
+   * callers and tests; new callers should prefer stopAllAsync which waits
+   * for the children to actually die before returning.
+   */
   stopAll(): void {
     this.disposed = true
     for (const entry of this.instances.values()) {
-      entry.process.kill('SIGTERM')
+      try {
+        entry.process.kill('SIGTERM')
+      } catch {
+        // ignore — process may already be dead
+      }
     }
+    this.instances.clear()
+    this.removeAllListeners()
+  }
+
+  /**
+   * Stop all managed instances and wait for them to exit. Sends SIGTERM,
+   * waits up to `graceMs`, then SIGKILLs any survivors. Resolves once every
+   * child process has actually exited.
+   *
+   * This MUST be called from the app-quit handler (before-quit) in
+   * preference to stopAll(), wrapped in event.preventDefault() so Electron
+   * waits for it before tearing down the process.
+   */
+  async stopAllAsync(graceMs = KILL_GRACE_MS): Promise<void> {
+    this.disposed = true
+    const pending = Array.from(this.instances.values()).map((entry) =>
+      killChild(entry.process, graceMs)
+    )
+    await Promise.all(pending)
+    // At this point every 'exit' handler has fired and removed its entry,
+    // but clear defensively in case of a mocked/partial test environment.
     this.instances.clear()
     this.removeAllListeners()
   }

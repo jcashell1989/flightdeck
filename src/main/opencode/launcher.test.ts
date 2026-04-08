@@ -216,3 +216,71 @@ describe('OpencodeLauncher.stopAll', () => {
     await expect(launcher.launch(makeProfile(), '/projects/auth')).rejects.toThrow('disposed')
   })
 })
+
+// ── stopAllAsync (td-d699f0) ──────────────────────────────────────────────
+
+describe('OpencodeLauncher.stopAllAsync', () => {
+  it('waits for children to exit before resolving', async () => {
+    vi.clearAllMocks()
+    const launcher = new OpencodeLauncher()
+    makePortFree()
+    makeServerReady()
+    mockChildProcess.exitCode = null
+
+    // Capture the exit handler so we can invoke it manually to simulate
+    // the child actually dying after SIGTERM.
+    let exitHandler: ((code: number) => void) | undefined
+    mockChildProcess.on.mockImplementation((event: string, cb: (code: number) => void) => {
+      if (event === 'exit') exitHandler = cb
+      return mockChildProcess
+    })
+    // killChild uses child.once('exit', …), so also capture via once.
+    const onceHandler = vi.fn((event: string, cb: (code: number) => void) => {
+      if (event === 'exit') {
+        // Resolve the kill promise by invoking the captured handler async.
+        setTimeout(() => cb(0), 0)
+      }
+      return mockChildProcess
+    })
+    ;(mockChildProcess as unknown as { once: typeof onceHandler }).once = onceHandler
+
+    await launcher.launch(makeProfile({ id: 'p1' }), '/projects/auth')
+
+    await launcher.stopAllAsync(100)
+
+    expect(mockChildProcess.kill).toHaveBeenCalledWith('SIGTERM')
+    // Trigger the exit handler to flush the 'stopped' event path.
+    exitHandler?.(0)
+  })
+
+  it('escalates to SIGKILL after grace period if child does not exit', async () => {
+    vi.clearAllMocks()
+    const launcher = new OpencodeLauncher()
+    makePortFree()
+    makeServerReady()
+    mockChildProcess.exitCode = null
+    ;(mockChildProcess as unknown as { killed: boolean }).killed = false
+    mockChildProcess.on.mockImplementation(() => mockChildProcess)
+
+    await launcher.launch(makeProfile({ id: 'p1' }), '/projects/auth')
+
+    // After launch, swap to fake timers and a no-op once() so killChild
+    // hangs waiting for 'exit'. This simulates a stuck child.
+    vi.useFakeTimers()
+    ;(mockChildProcess as unknown as { once: (e: string, cb: unknown) => unknown }).once = vi.fn(
+      () => mockChildProcess
+    )
+
+    const stopPromise = launcher.stopAllAsync(50)
+    // SIGTERM fires immediately (synchronous in killChild).
+    expect(mockChildProcess.kill).toHaveBeenCalledWith('SIGTERM')
+
+    // Advance past the grace period — SIGKILL should fire.
+    await vi.advanceTimersByTimeAsync(60)
+    expect(mockChildProcess.kill).toHaveBeenCalledWith('SIGKILL')
+
+    vi.useRealTimers()
+    // stopPromise will hang forever in this synthetic scenario; don't await it.
+    void stopPromise
+  })
+})

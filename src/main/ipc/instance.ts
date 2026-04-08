@@ -1,10 +1,10 @@
-import { ipcMain } from 'electron'
 import { configStore } from '../config/store'
 import { opencodeRegistry } from '../opencode/registry'
 import { opencodeLauncher } from '../opencode/launcher'
+import { safeHandle } from './_helpers'
 
 export function register(): void {
-  ipcMain.handle(
+  safeHandle(
     'instance:dispatch',
     async (_e, args: { profileId: string; directory: string; prompt: string }) => {
       const cfg = configStore.get()
