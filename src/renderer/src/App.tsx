@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Session, View, isAttention } from './types'
 import { useTheme } from './hooks/useTheme'
 import { useKeyboardNav } from './hooks/useKeyboardNav'
@@ -23,6 +23,8 @@ export function App() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [fullScreen, setFullScreen] = useState(false)
   const [cmdKOpen, setCmdKOpen] = useState(false)
+  // Pre-selected project path for ⌘K (set by "+ New Session" button)
+  const cmdKPresetPath = useRef<string | null>(null)
 
   // J/K nav order must match the visual order users see. Both Dashboard and
   // Sessions sort attention-first, then most recent activity. We mirror that
@@ -93,20 +95,6 @@ export function App() {
     }
   }, [cmdKOpen, fullScreen, panelOpen])
 
-  useKeyboardNav({
-    onViewChange: handleViewChange,
-    onFocusNext: () => {
-      setFocusIndex((i) => Math.min(i + 1, allSessions.length - 1))
-    },
-    onFocusPrev: () => {
-      setFocusIndex((i) => Math.max(i - 1, 0))
-    },
-    onEscape: handleEscape,
-    onEnter: () => setPanelOpen(true),
-    onToggleFullScreen: handleToggleFullScreen,
-    onOpenCmdK: () => setCmdKOpen(true)
-  })
-
   const focusedSessionId = focusedSession?.id ?? null
 
   const handleDispatched = useCallback(
@@ -121,6 +109,32 @@ export function App() {
     },
     [allSessions]
   )
+
+  const handleNewSession = useCallback((projectPath: string) => {
+    cmdKPresetPath.current = projectPath
+    setCmdKOpen(true)
+  }, [])
+
+  const handleRefresh = useCallback(() => {
+    const api = window.electronAPI?.opencode
+    if (api) void api.getSnapshot()
+  }, [])
+
+  useKeyboardNav({
+    onViewChange: handleViewChange,
+    onFocusNext: () => {
+      setFocusIndex((i) => Math.min(i + 1, allSessions.length - 1))
+    },
+    onFocusPrev: () => {
+      setFocusIndex((i) => Math.max(i - 1, 0))
+    },
+    onEscape: handleEscape,
+    onEnter: () => setPanelOpen(true),
+    onToggleFullScreen: handleToggleFullScreen,
+    onOpenCmdK: () => setCmdKOpen(true),
+    onAttentionFilter: () => handleViewChange('sessions'),
+    onRefresh: handleRefresh
+  })
 
   return (
     <div className="app-layout">
@@ -138,6 +152,7 @@ export function App() {
                 projects={projects}
                 focusedSessionId={focusedSessionId}
                 onSessionClick={handleSessionClick}
+                onNewSession={handleNewSession}
               />
             )}
             {activeView === 'sessions' && (
@@ -160,8 +175,12 @@ export function App() {
         open={cmdKOpen}
         projects={projects}
         config={config}
-        onClose={() => setCmdKOpen(false)}
+        onClose={() => {
+          setCmdKOpen(false)
+          cmdKPresetPath.current = null
+        }}
         onDispatched={handleDispatched}
+        presetProjectPath={cmdKPresetPath.current}
       />
     </div>
   )

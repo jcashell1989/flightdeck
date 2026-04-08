@@ -6,9 +6,10 @@ interface DashboardProps {
   projects: Project[]
   focusedSessionId: string | null
   onSessionClick: (session: Session) => void
+  onNewSession?: (projectPath: string) => void
 }
 
-export function Dashboard({ projects, focusedSessionId, onSessionClick }: DashboardProps) {
+export function Dashboard({ projects, focusedSessionId, onSessionClick, onNewSession }: DashboardProps) {
   // Sort: projects with attention-needed sessions float to top, then by most recent activity
   const sorted = useMemo(() => {
     return [...projects].sort((a, b) => {
@@ -30,6 +31,7 @@ export function Dashboard({ projects, focusedSessionId, onSessionClick }: Dashbo
           project={project}
           focusedSessionId={focusedSessionId}
           onSessionClick={onSessionClick}
+          onNewSession={onNewSession}
         />
       ))}
     </div>

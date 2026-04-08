@@ -7,6 +7,8 @@ interface CmdKDispatchProps {
   config: AppConfig | null
   onClose: () => void
   onDispatched: (sessionId: string) => void
+  /** Pre-select this project path when the overlay opens */
+  presetProjectPath?: string | null
 }
 
 interface HistoryEntry {
@@ -43,7 +45,8 @@ export function CmdKDispatch({
   projects,
   config,
   onClose,
-  onDispatched
+  onDispatched,
+  presetProjectPath
 }: CmdKDispatchProps) {
   const [prompt, setPrompt] = useState('')
   const [targetPath, setTargetPath] = useState<string>('')
@@ -53,6 +56,8 @@ export function CmdKDispatch({
   const [error, setError] = useState<string | null>(null)
   const [profiles, setProfiles] = useState<AgentProfile[]>([])
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
+  // 'new' = create new session; any other value = existing sessionId to append to
+  const [sessionMode, setSessionMode] = useState<string>('new')
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const useMock = config?.mock.enabled ?? true
 
@@ -90,12 +95,16 @@ export function CmdKDispatch({
     [targetPath, dispatchableProjects]
   )
 
-  // Default target + focus on open.
+  // Default target + focus on open. Preset path (from "+ New Session") takes priority.
   useEffect(() => {
     if (!open) return
-    if (!targetPath && projects.length > 0) setTargetPath(projects[0].path)
+    if (presetProjectPath) {
+      setTargetPath(presetProjectPath)
+    } else if (!targetPath && projects.length > 0) {
+      setTargetPath(projects[0].path)
+    }
     setTimeout(() => textareaRef.current?.focus(), 0)
-  }, [open, projects, targetPath])
+  }, [open, projects, targetPath, presetProjectPath])
 
   // Clear state when closed.
   useEffect(() => {
@@ -103,8 +112,14 @@ export function CmdKDispatch({
       setPrompt('')
       setError(null)
       setBusy(false)
+      setSessionMode('new')
     }
   }, [open])
+
+  // Reset session mode when target project changes.
+  useEffect(() => {
+    setSessionMode('new')
+  }, [targetPath])
 
   const dispatch = useCallback(async () => {
     const text = prompt.trim()
@@ -117,7 +132,14 @@ export function CmdKDispatch({
     setError(null)
     try {
       if (useMock) {
-        console.warn('[cmdk] mock mode — dispatch is a no-op', { target: target.path, text })
+        console.warn('[cmdk] mock mode — dispatch is a no-op', { target: target.path, text, sessionMode })
+      } else if (sessionMode !== 'new') {
+        // Append to existing session.
+        const api = window.electronAPI?.opencode
+        if (!api) throw new Error('bridge unavailable')
+        setBusyLabel('sending…')
+        await api.sendPrompt(sessionMode, text)
+        onDispatched(sessionMode)
       } else if (selectedProfileId) {
         // Managed dispatch: launcher starts opencode serve if needed.
         const api = window.electronAPI?.instance
@@ -284,7 +306,21 @@ export function CmdKDispatch({
           ) : (
             <span style={{ color: 'var(--fg-subtle)' }}>· opencode</span>
           )}
-          <span style={{ color: 'var(--fg-subtle)' }}>· New session</span>
+          <span style={{ color: 'var(--fg-subtle)' }}>·</span>
+          <select
+            value={sessionMode}
+            onChange={(e) => setSessionMode(e.target.value)}
+            style={selectStyle}
+          >
+            <option value="new">New session</option>
+            {target?.sessions
+              .filter((s) => s.agentType === 'opencode')
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  Append to: #{s.id.slice(-4)} ({s.state})
+                </option>
+              ))}
+          </select>
           {projects.length > dispatchableProjects.length && (
             <span
               title="Claude Code sessions are monitor-only and cannot receive dispatches"

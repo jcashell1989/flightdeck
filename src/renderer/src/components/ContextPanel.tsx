@@ -554,43 +554,127 @@ function bannerBtn(color: string): CSSProperties {
 
 // ─── Diff Tab ─────────────────────────────────────────────────────────────
 
+interface DiffFile {
+  filename: string
+  added: number
+  removed: number
+  startLine: number // index into `lines` where this file's diff begins
+}
+
+function parseDiffFiles(lines: string[]): DiffFile[] {
+  const files: DiffFile[] = []
+  let current: DiffFile | null = null
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (line.startsWith('diff --git ')) {
+      if (current) files.push(current)
+      // Extract filename from "diff --git a/foo b/foo" → "foo"
+      const match = line.match(/diff --git a\/.+ b\/(.+)/)
+      current = { filename: match?.[1] ?? line, added: 0, removed: 0, startLine: i }
+    } else if (current) {
+      if (line.startsWith('+') && !line.startsWith('+++')) current.added++
+      if (line.startsWith('-') && !line.startsWith('---')) current.removed++
+    }
+  }
+  if (current) files.push(current)
+  return files
+}
+
 function DiffTab({ project, useMock }: { project: Project | null; useMock: boolean }) {
   const result = useShellResult(project?.path ?? null, useMock, 'getDiff')
   const content = result.data?.stdout
   const lines = useMemo(() => (content ? content.split('\n') : []), [content])
+  const files = useMemo(() => parseDiffFiles(lines), [lines])
+  const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const diffRef = useRef<HTMLDivElement | null>(null)
+
+  // Scroll to selected file's diff block
+  useEffect(() => {
+    if (!selectedFile || !diffRef.current) return
+    const el = diffRef.current.querySelector(`[data-file="${CSS.escape(selectedFile)}"]`)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [selectedFile])
+
   return (
-    <div style={{ flex: 1, overflow: 'auto', padding: 12, minHeight: 0 }}>
-      {result.loading && (
-        <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>loading diff…</div>
-      )}
-      {result.error && (
-        <div style={{ color: 'var(--status-error)', fontSize: 11 }}>{result.error}</div>
-      )}
-      {useMock && (
-        <div style={{ color: 'var(--fg-subtle)', fontSize: 11, marginBottom: 8 }}>
-          mock mode — no live diff
-        </div>
-      )}
-      {!result.loading && !content && !result.error && (
-        <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>no changes</div>
-      )}
-      {lines.length > 0 && (
-        <pre
-          className="mono"
+    <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      {/* File tree */}
+      {files.length > 0 && (
+        <div
           style={{
-            fontSize: 11,
-            lineHeight: 1.4,
-            margin: 0,
-            whiteSpace: 'pre'
+            width: 200,
+            flexShrink: 0,
+            borderRight: '1px solid var(--border)',
+            overflow: 'auto',
+            padding: '8px 0',
+            fontSize: 11
           }}
         >
-          {lines.map((line, i) => (
-            <div key={i} style={{ color: diffLineColor(line) }}>
-              {line || ' '}
-            </div>
+          {files.map((f) => (
+            <button
+              key={f.filename}
+              onClick={() => setSelectedFile(f.filename)}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '4px 10px',
+                background: selectedFile === f.filename ? 'var(--bg-element)' : 'none',
+                border: 'none',
+                color: 'var(--fg-primary)',
+                cursor: 'pointer',
+                fontSize: 11,
+                fontFamily: '"Berkeley Mono", "SF Mono", monospace',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}
+              title={f.filename}
+            >
+              <span style={{ color: 'var(--status-running)', marginRight: 4 }}>+{f.added}</span>
+              <span style={{ color: 'var(--status-error)', marginRight: 6 }}>-{f.removed}</span>
+              {f.filename.split('/').pop()}
+            </button>
           ))}
-        </pre>
+        </div>
       )}
+
+      {/* Diff content */}
+      <div ref={diffRef} style={{ flex: 1, overflow: 'auto', padding: 12, minHeight: 0 }}>
+        {result.loading && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>loading diff…</div>
+        )}
+        {result.error && (
+          <div style={{ color: 'var(--status-error)', fontSize: 11 }}>{result.error}</div>
+        )}
+        {useMock && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 11, marginBottom: 8 }}>
+            mock mode — no live diff
+          </div>
+        )}
+        {!result.loading && !content && !result.error && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>no changes</div>
+        )}
+        {lines.length > 0 && (
+          <pre
+            className="mono"
+            style={{ fontSize: 11, lineHeight: 1.4, margin: 0, whiteSpace: 'pre' }}
+          >
+            {lines.map((line, i) => {
+              // Attach data-file anchor at each "diff --git" line
+              const fileAtLine = files.find((f) => f.startLine === i)
+              return (
+                <div
+                  key={i}
+                  data-file={fileAtLine?.filename}
+                  style={{ color: diffLineColor(line) }}
+                >
+                  {line || ' '}
+                </div>
+              )
+            })}
+          </pre>
+        )}
+      </div>
     </div>
   )
 }

@@ -129,7 +129,7 @@ function AddProjectDrawer({
           onClick={onClose}
           style={{ background: 'none', border: 'none', color: 'var(--fg-subtle)', cursor: 'pointer', fontSize: 16 }}
         >
-          \u00d7
+          ×
         </button>
       </div>
 
@@ -165,7 +165,7 @@ function AddProjectDrawer({
               whiteSpace: 'nowrap'
             }}
           >
-            Browse\u2026
+            Browse…
           </button>
         </div>
         {validationText && (
@@ -227,7 +227,7 @@ function AddProjectDrawer({
             opacity: validation?.valid ? 1 : 0.5
           }}
         >
-          {submitting ? 'Adding\u2026' : 'Add Project \u2192'}
+          {submitting ? 'Adding…' : 'Add Project →'}
         </button>
       </div>
     </div>
@@ -303,7 +303,7 @@ function DeleteConfirm({
             cursor: input === name ? 'pointer' : 'not-allowed'
           }}
         >
-          {deleting ? 'Deleting\u2026' : 'Delete'}
+          {deleting ? 'Deleting…' : 'Delete'}
         </button>
         <button
           onClick={onCancel}

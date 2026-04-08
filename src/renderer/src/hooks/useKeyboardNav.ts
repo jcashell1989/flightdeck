@@ -9,6 +9,8 @@ interface UseKeyboardNavOptions {
   onEnter: () => void
   onToggleFullScreen: () => void
   onOpenCmdK: () => void
+  onAttentionFilter?: () => void
+  onRefresh?: () => void
 }
 
 const VIEW_KEYS: Record<string, View> = {
@@ -70,6 +72,16 @@ export function useKeyboardNav(opts: UseKeyboardNavOptions): void {
           break
         case 'Enter':
           o.onEnter()
+          break
+        case 'a':
+        case 'A':
+          e.preventDefault()
+          o.onAttentionFilter?.()
+          break
+        case 'r':
+        case 'R':
+          e.preventDefault()
+          o.onRefresh?.()
           break
       }
     }

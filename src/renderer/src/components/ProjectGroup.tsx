@@ -6,9 +6,10 @@ interface ProjectGroupProps {
   project: Project
   focusedSessionId: string | null
   onSessionClick: (session: Session) => void
+  onNewSession?: (projectPath: string) => void
 }
 
-export function ProjectGroup({ project, focusedSessionId, onSessionClick }: ProjectGroupProps) {
+export function ProjectGroup({ project, focusedSessionId, onSessionClick, onNewSession }: ProjectGroupProps) {
   const [collapsed, setCollapsed] = useState(false)
 
   const activeCount = project.sessions.filter((s) => s.state === 'running' || s.state === 'approval' || s.state === 'question').length
@@ -25,6 +26,7 @@ export function ProjectGroup({ project, focusedSessionId, onSessionClick }: Proj
         tabIndex={0}
         aria-expanded={!collapsed}
         aria-label={`${project.name} project, ${collapsed ? 'collapsed' : 'expanded'}`}
+        className="project-group-header"
         onClick={() => setCollapsed(!collapsed)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -58,6 +60,28 @@ export function ProjectGroup({ project, focusedSessionId, onSessionClick }: Proj
             ● {activeCount} active
           </span>
         ) : null}
+        {onNewSession && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onNewSession(project.path)
+            }}
+            title="New session for this project"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--fg-subtle)',
+              cursor: 'pointer',
+              fontSize: 11,
+              padding: '0 4px',
+              opacity: 0,
+              transition: 'opacity 0.15s'
+            }}
+            className="new-session-btn"
+          >
+            + New Session
+          </button>
+        )}
       </div>
 
       {!collapsed && (
