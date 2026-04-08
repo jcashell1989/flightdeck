@@ -11,6 +11,9 @@ interface UseKeyboardNavOptions {
   onOpenCmdK: () => void
   onAttentionFilter?: () => void
   onRefresh?: () => void
+  /** True when a modal overlay (CmdK dispatch) owns focus and should
+   *  swallow single-key shortcuts even if the current e.target is <body>. */
+  isModalOpen?: boolean
 }
 
 const VIEW_KEYS: Record<string, View> = {
@@ -44,8 +47,10 @@ export function useKeyboardNav(opts: UseKeyboardNavOptions): void {
         return
       }
 
-      // Everything else: ignore while typing.
-      if (inInput) return
+      // Everything else: ignore while typing or while a modal overlay owns
+      // focus (prevents A/R/J/K/1-4 from firing against the background view
+      // when CmdK opened and focus hasn't landed in its textarea yet).
+      if (inInput || o.isModalOpen) return
 
       const view = VIEW_KEYS[e.key]
       if (view) {

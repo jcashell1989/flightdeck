@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { AppConfig } from '../types'
 
 /**
@@ -24,6 +24,10 @@ export function useConfig(): {
 } {
   const [config, setLocalConfig] = useState<AppConfig | null>(null)
   const [configError, setConfigError] = useState<string | null>(null)
+  // Serialise concurrent setConfig calls so rapid-fire patches (e.g. multiple
+  // checkbox toggles) don't race against each other's in-flight writes or
+  // against the config-changed broadcast.
+  const writeChain = useRef<Promise<unknown>>(Promise.resolve())
 
   useEffect(() => {
     const api = window.electronAPI?.config
@@ -40,16 +44,21 @@ export function useConfig(): {
   const setConfig = useCallback(async (patch: Partial<AppConfig>): Promise<boolean> => {
     const api = window.electronAPI?.config
     if (!api) return false
-    try {
-      const next = await api.set(patch)
-      setLocalConfig(next)
-      setConfigError(null)
-      return true
-    } catch (e) {
-      setConfigError(formatIpcError(e))
-      console.error('[useConfig] set failed:', e)
-      return false
+    const run = async (): Promise<boolean> => {
+      try {
+        const next = await api.set(patch)
+        setLocalConfig(next)
+        setConfigError(null)
+        return true
+      } catch (e) {
+        setConfigError(formatIpcError(e))
+        console.error('[useConfig] set failed:', e)
+        return false
+      }
     }
+    const chained = writeChain.current.then(run, run)
+    writeChain.current = chained.catch(() => undefined)
+    return chained
   }, [])
 
   const clearConfigError = useCallback(() => setConfigError(null), [])

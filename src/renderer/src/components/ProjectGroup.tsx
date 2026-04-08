@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Project, Session } from '../types'
+import { Project, Session, isAttention } from '../types'
 import { SessionCard } from './SessionCard'
 
 interface ProjectGroupProps {
@@ -13,7 +13,7 @@ export function ProjectGroup({ project, focusedSessionId, onSessionClick, onNewS
   const [collapsed, setCollapsed] = useState(false)
 
   const activeCount = project.sessions.filter((s) => s.state === 'running' || s.state === 'approval' || s.state === 'question').length
-  const attentionCount = project.sessions.filter((s) => s.state === 'approval' || s.state === 'question' || s.state === 'review').length
+  const attentionCount = project.sessions.filter((s) => isAttention(s.state)).length
 
   const opencodeSessions = project.sessions.filter((s) => s.agentType === 'opencode')
   const claudeSessions = project.sessions.filter((s) => s.agentType === 'claude-code')

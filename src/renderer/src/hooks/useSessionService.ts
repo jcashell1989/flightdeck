@@ -37,8 +37,10 @@ export function useSessionService(config: AppConfig | null): SessionServiceResul
     }
 
     let disposed = false
-    // Push events get sequence numbers starting at 1; the initial fetch is
-    // sequence 0 and is only applied if no push has landed yet.
+    // Any push applied is tracked so a late-arriving initial fetch (seq 0)
+    // cannot overwrite a fresher push that already landed. Pushes always
+    // win over the initial fetch because we bump pushSeq BEFORE apply and
+    // use <= for the staleness check.
     let lastAppliedSeq = -1
     let pushSeq = 0
 
@@ -53,7 +55,7 @@ export function useSessionService(config: AppConfig | null): SessionServiceResul
       seq: number
     ): void => {
       if (disposed) return
-      if (seq < lastAppliedSeq) return
+      if (seq <= lastAppliedSeq) return
       lastAppliedSeq = seq
       setLiveProjects(snap.projects)
       setLiveStatus(snap.aggregateStatus.status)
@@ -62,7 +64,8 @@ export function useSessionService(config: AppConfig | null): SessionServiceResul
     }
 
     // Subscribe FIRST so we don't miss events fired between the fetch and
-    // its resolution.
+    // its resolution. Pushes start at seq 1; initial fetch is seq 0 so it
+    // only applies if no push has landed yet.
     const unsub = api.onSnapshot((snap) => {
       pushSeq += 1
       apply(snap, pushSeq)

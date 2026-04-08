@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { configStore, AgentProfile } from '../config/store'
 import { safeHandle } from './_helpers'
 
@@ -7,7 +8,7 @@ export function register(): void {
   })
 
   safeHandle('profile:add', async (_e, p: Omit<AgentProfile, 'id'>) => {
-    const id = crypto.randomUUID()
+    const id = randomUUID()
     const profile: AgentProfile = { ...p, id }
     const cfg = configStore.get()
     await configStore.set({ profiles: [...cfg.profiles, profile] })

@@ -329,20 +329,39 @@ function ProfileList() {
 
   const handleSetDefault = useCallback(
     async (id: string) => {
-      // Flip isDefault on all profiles and persist each change.
-      const updates = profiles.map((p) => ({ ...p, isDefault: p.id === id }))
-      const results = await Promise.all(
-        updates.map((p) => window.electronAPI?.profile?.update(p))
-      )
-      setProfiles(results.filter((r): r is AgentProfile => r !== undefined))
+      // Optimistic update so the UI reflects the new default immediately and
+      // a failed IPC can never leave profiles undefined (prior code
+      // filtered undefined results, which would make rows disappear).
+      const next = profiles.map((p) => ({ ...p, isDefault: p.id === id }))
+      setProfiles(next)
+      const api = window.electronAPI?.profile
+      if (!api) return
+      // Persist sequentially to avoid clobbering each other on the main side
+      // (every update round-trips the full profiles array through configStore).
+      for (const p of next) {
+        await api.update(p)
+      }
     },
     [profiles]
   )
 
   const handleDelete = useCallback(async (id: string) => {
-    await window.electronAPI?.profile?.delete(id)
-    setProfiles((prev) => prev.filter((p) => p.id !== id))
-  }, [])
+    const api = window.electronAPI?.profile
+    if (!api) return
+    const removed = profiles.find((p) => p.id === id)
+    const remaining = profiles.filter((p) => p.id !== id)
+    await api.delete(id)
+    // If the deleted profile was the default, promote the first remaining
+    // profile to default so the UI isn't left with no radio checked.
+    if (removed?.isDefault && remaining.length > 0 && !remaining.some((p) => p.isDefault)) {
+      const promoted = { ...remaining[0], isDefault: true }
+      const next = [promoted, ...remaining.slice(1)]
+      setProfiles(next)
+      await api.update(promoted)
+    } else {
+      setProfiles(remaining)
+    }
+  }, [profiles])
 
   const handleAdd = useCallback(
     async (draft: Omit<AgentProfile, 'id'>) => {

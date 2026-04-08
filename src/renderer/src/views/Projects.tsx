@@ -249,8 +249,10 @@ function DeleteConfirm({
   const [deleting, setDeleting] = useState(false)
   const name = project.name ?? project.path.split('/').filter(Boolean).pop() ?? project.path
 
+  const matches = input.trim() === name.trim()
+
   const handleDelete = async () => {
-    if (input !== name || deleting) return
+    if (!matches || deleting) return
     setDeleting(true)
     try {
       await window.electronAPI?.project?.delete(project.path)
@@ -292,15 +294,15 @@ function DeleteConfirm({
         />
         <button
           onClick={handleDelete}
-          disabled={input !== name || deleting}
+          disabled={!matches || deleting}
           style={{
             padding: '4px 10px',
             fontSize: 11,
             border: '1px solid var(--status-error)',
             borderRadius: 4,
             background: 'transparent',
-            color: input === name ? 'var(--status-error)' : 'var(--fg-subtle)',
-            cursor: input === name ? 'pointer' : 'not-allowed'
+            color: matches ? 'var(--status-error)' : 'var(--fg-subtle)',
+            cursor: matches ? 'pointer' : 'not-allowed'
           }}
         >
           {deleting ? 'Deleting…' : 'Delete'}

@@ -133,7 +133,8 @@ export function App() {
     onToggleFullScreen: handleToggleFullScreen,
     onOpenCmdK: () => setCmdKOpen(true),
     onAttentionFilter: () => handleViewChange('sessions'),
-    onRefresh: handleRefresh
+    onRefresh: handleRefresh,
+    isModalOpen: cmdKOpen
   })
 
   return (

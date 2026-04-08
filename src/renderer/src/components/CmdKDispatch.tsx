@@ -314,7 +314,11 @@ export function CmdKDispatch({
           >
             <option value="new">New session</option>
             {target?.sessions
-              .filter((s) => s.agentType === 'opencode')
+              .filter(
+                (s) =>
+                  s.agentType === 'opencode' &&
+                  (s.state === 'running' || s.state === 'idle' || s.state === 'question')
+              )
               .map((s) => (
                 <option key={s.id} value={s.id}>
                   Append to: #{s.id.slice(-4)} ({s.state})
