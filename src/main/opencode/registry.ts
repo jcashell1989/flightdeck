@@ -72,6 +72,29 @@ export class OpencodeRegistry extends EventEmitter {
     return Array.from(this.clients.entries()).map(([key, client]) => ({ key, client }))
   }
 
+  /**
+   * Ensure a client exists and is connected for a managed (launcher-spawned)
+   * instance. The key is `managed:${profileId}:${directory}` to avoid
+   * colliding with manually-configured host:port keys.
+   *
+   * If a client already exists for this key, returns it immediately.
+   * Otherwise creates a new client, registers it, and starts connecting.
+   */
+  ensureManagedClient(
+    instance: OpencodeInstance,
+    managedKey: string
+  ): OpencodeInstanceClient {
+    const existing = this.clients.get(managedKey)
+    if (existing) return existing
+
+    const client = new OpencodeInstanceClient(instance)
+    client.on('change', () => this.emit('change'))
+    client.on('status', () => this.emit('change'))
+    this.clients.set(managedKey, client)
+    void client.connect()
+    return client
+  }
+
   snapshot(): { projects: NormalizedProject[]; aggregateStatus: AggregateStatus } {
     const projects: NormalizedProject[] = []
     const perInstance: AggregateStatus['perInstance'] = []

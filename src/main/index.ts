@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 import { execFile } from 'child_process'
 import { promises as fs } from 'fs'
 import { is } from '@electron-toolkit/utils'
-import { configStore, AppConfig, ProjectConfig } from './config/store'
+import { configStore, AppConfig, ProjectConfig, AgentProfile } from './config/store'
 import { opencodeRegistry } from './opencode/registry'
 import { claudeMonitor } from './claude/monitor'
 import { opencodeLauncher } from './opencode/launcher'
@@ -202,6 +202,72 @@ ipcMain.handle('project:delete', async (_e, path: string) => {
   await configStore.set({ projects })
   return { ok: true }
 })
+
+// ── Agent profile IPC ──────────────────────────────────────────────────────
+
+ipcMain.handle('profile:list', () => {
+  return configStore.get().profiles
+})
+
+ipcMain.handle('profile:add', async (_e, p: Omit<AgentProfile, 'id'>) => {
+  const id = crypto.randomUUID()
+  const profile: AgentProfile = { ...p, id }
+  const cfg = configStore.get()
+  await configStore.set({ profiles: [...cfg.profiles, profile] })
+  return profile
+})
+
+ipcMain.handle('profile:update', async (_e, p: AgentProfile) => {
+  const cfg = configStore.get()
+  const profiles = cfg.profiles.map((existing) => (existing.id === p.id ? p : existing))
+  await configStore.set({ profiles })
+  return p
+})
+
+ipcMain.handle('profile:delete', async (_e, id: string) => {
+  const cfg = configStore.get()
+  const profiles = cfg.profiles.filter((p) => p.id !== id)
+  await configStore.set({ profiles })
+  return { ok: true }
+})
+
+// ── Managed instance dispatch IPC ─────────────────────────────────────────
+
+ipcMain.handle(
+  'instance:dispatch',
+  async (_e, args: { profileId: string; directory: string; prompt: string }) => {
+    const cfg = configStore.get()
+    const profile = cfg.profiles.find((p) => p.id === args.profileId)
+    if (!profile) throw new Error(`profile ${args.profileId} not found`)
+    if (profile.agentType !== 'opencode') {
+      throw new Error(`profile ${args.profileId} is not an opencode profile`)
+    }
+
+    // Launch (or reuse) the managed opencode serve instance.
+    const port = await opencodeLauncher.launch(profile, args.directory)
+    const managedKey = `managed:${args.profileId}:${args.directory}`
+    const instance = { host: '127.0.0.1', port, label: profile.label }
+
+    // Ensure the registry has a connected client for this instance.
+    const client = opencodeRegistry.ensureManagedClient(instance, managedKey)
+
+    // Wait briefly for the client to connect (it may be mid-handshake).
+    await new Promise<void>((resolve, reject) => {
+      if (client.snapshot().status === 'connected') return resolve()
+      const timeout = setTimeout(() => reject(new Error('client connect timeout')), 8000)
+      client.once('status', (ev: { status: string }) => {
+        if (ev.status === 'connected') {
+          clearTimeout(timeout)
+          resolve()
+        }
+      })
+    })
+
+    const sessionId = await client.createSession(args.directory)
+    await client.sendPrompt(sessionId, args.prompt)
+    return { sessionId }
+  }
+)
 
 configStore.on('change', (cfg: AppConfig) => broadcast('config-changed', cfg))
 

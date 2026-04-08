@@ -129,5 +129,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     archive: (path: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('project:archive', path),
     restore: (path: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('project:restore', path),
     delete: (path: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('project:delete', path)
+  },
+  profile: {
+    list: (): Promise<AgentProfile[]> => ipcRenderer.invoke('profile:list'),
+    add: (p: Omit<AgentProfile, 'id'>): Promise<AgentProfile> =>
+      ipcRenderer.invoke('profile:add', p),
+    update: (p: AgentProfile): Promise<AgentProfile> => ipcRenderer.invoke('profile:update', p),
+    delete: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('profile:delete', id)
+  },
+  instance: {
+    dispatch: (args: {
+      profileId: string
+      directory: string
+      prompt: string
+    }): Promise<{ sessionId: string }> => ipcRenderer.invoke('instance:dispatch', args)
   }
 })
