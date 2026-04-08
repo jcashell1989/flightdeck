@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { AppConfig, OpencodeInstance } from '../types'
+import { useCallback, useEffect, useState } from 'react'
+import { AgentProfile, AppConfig, OpencodeInstance } from '../types'
 
 interface SettingsProps {
   config: AppConfig | null
@@ -48,6 +48,11 @@ export function Settings({ config, setConfig }: SettingsProps) {
           onChange={updateInstances}
         />
         <Hint>One row per running <code>opencode serve</code>. Default port 4096. Edits commit on blur or Enter.</Hint>
+      </Section>
+
+      <Section title="Agent Profiles">
+        <ProfileList />
+        <Hint>One row per agent configuration. opencode profiles are dispatchable from ⌘K. API keys are stored in plain text in the app config.</Hint>
       </Section>
     </div>
   )
@@ -289,5 +294,351 @@ function Input({
         fontFamily: 'inherit'
       }}
     />
+  )
+}
+
+// ── Agent Profiles ────────────────────────────────────────────────────────────
+
+const AGENT_TYPES: AgentProfile['agentType'][] = ['opencode', 'claude-code']
+
+/** Shared inline-input style for the profiles table. */
+const profileInputStyle: React.CSSProperties = {
+  width: '100%',
+  background: 'transparent',
+  border: '1px solid var(--border)',
+  borderRadius: 4,
+  color: 'var(--fg-primary)',
+  fontSize: 12,
+  padding: '4px 6px',
+  fontFamily: 'inherit'
+}
+
+function ProfileList() {
+  const [profiles, setProfiles] = useState<AgentProfile[]>([])
+
+  useEffect(() => {
+    window.electronAPI?.profile?.list().then(setProfiles)
+  }, [])
+
+  const handleUpdate = useCallback(async (updated: AgentProfile) => {
+    const saved = await window.electronAPI?.profile?.update(updated)
+    if (saved) {
+      setProfiles((prev) => prev.map((p) => (p.id === saved.id ? saved : p)))
+    }
+  }, [])
+
+  const handleSetDefault = useCallback(
+    async (id: string) => {
+      // Flip isDefault on all profiles and persist each change.
+      const updates = profiles.map((p) => ({ ...p, isDefault: p.id === id }))
+      const results = await Promise.all(
+        updates.map((p) => window.electronAPI?.profile?.update(p))
+      )
+      setProfiles(results.filter((r): r is AgentProfile => r !== undefined))
+    },
+    [profiles]
+  )
+
+  const handleDelete = useCallback(async (id: string) => {
+    await window.electronAPI?.profile?.delete(id)
+    setProfiles((prev) => prev.filter((p) => p.id !== id))
+  }, [])
+
+  const handleAdd = useCallback(
+    async (draft: Omit<AgentProfile, 'id'>) => {
+      const isFirst = profiles.length === 0
+      const payload: Omit<AgentProfile, 'id'> = { ...draft, isDefault: isFirst || draft.isDefault }
+      const saved = await window.electronAPI?.profile?.add(payload)
+      if (saved) {
+        // If the new profile is default, clear default on others and persist.
+        if (saved.isDefault && profiles.length > 0) {
+          const cleared = await Promise.all(
+            profiles.map((p) => window.electronAPI?.profile?.update({ ...p, isDefault: false }))
+          )
+          setProfiles([
+            ...cleared.filter((r): r is AgentProfile => r !== undefined),
+            saved
+          ])
+        } else {
+          setProfiles((prev) => [...prev, saved])
+        }
+      }
+    },
+    [profiles]
+  )
+
+  return (
+    <div>
+      <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ color: 'var(--fg-subtle)', textAlign: 'left' }}>
+            <th style={{ padding: '4px 8px', fontWeight: 500 }}>Label</th>
+            <th style={{ padding: '4px 8px', fontWeight: 500 }}>Agent</th>
+            <th style={{ padding: '4px 8px', fontWeight: 500 }}>Provider</th>
+            <th style={{ padding: '4px 8px', fontWeight: 500 }}>Model</th>
+            <th style={{ padding: '4px 8px', fontWeight: 500, width: 120 }}>API Key</th>
+            <th style={{ padding: '4px 8px', fontWeight: 500, width: 50, textAlign: 'center' }}>Default</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {profiles.map((profile) => (
+            <ProfileRow
+              key={profile.id}
+              profile={profile}
+              onCommit={handleUpdate}
+              onSetDefault={() => handleSetDefault(profile.id)}
+              onRemove={() => handleDelete(profile.id)}
+            />
+          ))}
+          <ProfileAddRow onAdd={handleAdd} />
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function ProfileRow({
+  profile,
+  onCommit,
+  onSetDefault,
+  onRemove
+}: {
+  profile: AgentProfile
+  onCommit: (next: AgentProfile) => void
+  onSetDefault: () => void
+  onRemove: () => void
+}) {
+  const [label, setLabel] = useState(profile.label)
+  const [agentType, setAgentType] = useState<AgentProfile['agentType']>(profile.agentType)
+  const [provider, setProvider] = useState(profile.provider ?? '')
+  const [model, setModel] = useState(profile.model ?? '')
+  const [apiKey, setApiKey] = useState(profile.apiKey ?? '')
+  const [apiKeyVisible, setApiKeyVisible] = useState(false)
+
+  // Resync local draft when parent value changes.
+  useEffect(() => {
+    setLabel(profile.label)
+    setAgentType(profile.agentType)
+    setProvider(profile.provider ?? '')
+    setModel(profile.model ?? '')
+    setApiKey(profile.apiKey ?? '')
+  }, [profile.label, profile.agentType, profile.provider, profile.model, profile.apiKey])
+
+  const buildNext = (): AgentProfile => ({
+    ...profile,
+    label: label.trim() || profile.label,
+    agentType,
+    provider: provider.trim() || undefined,
+    model: model.trim() || undefined,
+    apiKey: apiKey || undefined
+  })
+
+  const commit = (): void => {
+    const next = buildNext()
+    const unchanged =
+      next.label === profile.label &&
+      next.agentType === profile.agentType &&
+      (next.provider ?? '') === (profile.provider ?? '') &&
+      (next.model ?? '') === (profile.model ?? '') &&
+      (next.apiKey ?? '') === (profile.apiKey ?? '')
+    if (!unchanged) onCommit(next)
+  }
+
+  const revert = (): void => {
+    setLabel(profile.label)
+    setAgentType(profile.agentType)
+    setProvider(profile.provider ?? '')
+    setModel(profile.model ?? '')
+    setApiKey(profile.apiKey ?? '')
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter') {
+      ;(e.target as HTMLInputElement).blur()
+    } else if (e.key === 'Escape') {
+      revert()
+      ;(e.target as HTMLInputElement).blur()
+    }
+  }
+
+  return (
+    <tr style={{ borderTop: '1px solid var(--border)' }}>
+      {/* Label */}
+      <td style={{ padding: '4px 8px' }}>
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          onBlur={commit}
+          onKeyDown={handleKeyDown}
+          style={profileInputStyle}
+        />
+      </td>
+      {/* Agent type */}
+      <td style={{ padding: '4px 8px' }}>
+        <select
+          value={agentType}
+          onChange={(e) => {
+            setAgentType(e.target.value as AgentProfile['agentType'])
+            // Commit immediately on select change — no blur needed.
+            onCommit({ ...buildNext(), agentType: e.target.value as AgentProfile['agentType'] })
+          }}
+          style={{
+            ...profileInputStyle,
+            cursor: 'pointer'
+          }}
+        >
+          {AGENT_TYPES.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+      </td>
+      {/* Provider */}
+      <td style={{ padding: '4px 8px' }}>
+        <input
+          value={provider}
+          onChange={(e) => setProvider(e.target.value)}
+          onBlur={commit}
+          onKeyDown={handleKeyDown}
+          style={profileInputStyle}
+        />
+      </td>
+      {/* Model */}
+      <td style={{ padding: '4px 8px' }}>
+        <input
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          onBlur={commit}
+          onKeyDown={handleKeyDown}
+          style={profileInputStyle}
+        />
+      </td>
+      {/* API Key — password field that reveals on focus */}
+      <td style={{ padding: '4px 8px', width: 120 }}>
+        <input
+          type={apiKeyVisible ? 'text' : 'password'}
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          onFocus={() => setApiKeyVisible(true)}
+          onBlur={() => {
+            setApiKeyVisible(false)
+            commit()
+          }}
+          onKeyDown={handleKeyDown}
+          style={profileInputStyle}
+        />
+      </td>
+      {/* Default radio */}
+      <td style={{ padding: '4px 8px', width: 50, textAlign: 'center' }}>
+        <input
+          type="radio"
+          name="profile-default"
+          checked={profile.isDefault}
+          onChange={onSetDefault}
+          style={{ cursor: 'pointer' }}
+        />
+      </td>
+      {/* Delete */}
+      <td style={{ padding: '4px 8px', width: 24 }}>
+        <button
+          onClick={onRemove}
+          style={{ background: 'transparent', border: 'none', color: 'var(--fg-subtle)', cursor: 'pointer' }}
+          aria-label="Remove profile"
+        >
+          ✕
+        </button>
+      </td>
+    </tr>
+  )
+}
+
+function ProfileAddRow({ onAdd }: { onAdd: (draft: Omit<AgentProfile, 'id'>) => void }) {
+  const [label, setLabel] = useState('')
+  const [agentType, setAgentType] = useState<AgentProfile['agentType']>('opencode')
+  const [provider, setProvider] = useState('')
+  const [model, setModel] = useState('')
+  const [apiKey, setApiKey] = useState('')
+
+  const add = (): void => {
+    if (!label.trim()) return
+    onAdd({
+      label: label.trim(),
+      agentType,
+      provider: provider.trim() || undefined,
+      model: model.trim() || undefined,
+      apiKey: apiKey || undefined,
+      isDefault: false
+    })
+    setLabel('')
+    setProvider('')
+    setModel('')
+    setApiKey('')
+    setAgentType('opencode')
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter') add()
+  }
+
+  return (
+    <tr style={{ borderTop: '1px solid var(--border)' }}>
+      <td style={{ padding: '4px 8px' }}>
+        <input
+          placeholder="Label"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          onKeyDown={handleKeyDown}
+          style={profileInputStyle}
+        />
+      </td>
+      <td style={{ padding: '4px 8px' }}>
+        <select
+          value={agentType}
+          onChange={(e) => setAgentType(e.target.value as AgentProfile['agentType'])}
+          style={{ ...profileInputStyle, cursor: 'pointer' }}
+        >
+          {AGENT_TYPES.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+      </td>
+      <td style={{ padding: '4px 8px' }}>
+        <input
+          placeholder="Provider"
+          value={provider}
+          onChange={(e) => setProvider(e.target.value)}
+          onKeyDown={handleKeyDown}
+          style={profileInputStyle}
+        />
+      </td>
+      <td style={{ padding: '4px 8px' }}>
+        <input
+          placeholder="Model"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          onKeyDown={handleKeyDown}
+          style={profileInputStyle}
+        />
+      </td>
+      <td style={{ padding: '4px 8px', width: 120 }}>
+        <input
+          type="password"
+          placeholder="API Key"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          onKeyDown={handleKeyDown}
+          style={profileInputStyle}
+        />
+      </td>
+      <td style={{ padding: '4px 8px', width: 50 }} />
+      <td style={{ padding: '4px 8px', width: 24 }}>
+        <button
+          onClick={add}
+          style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--fg-muted)', cursor: 'pointer', padding: '2px 6px' }}
+        >
+          +
+        </button>
+      </td>
+    </tr>
   )
 }
