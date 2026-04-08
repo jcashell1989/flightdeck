@@ -53,9 +53,25 @@ export function CmdKDispatch({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const useMock = config?.mock.enabled ?? true
 
+  // Only show projects that can receive opencode dispatches.
+  // A project is dispatchable if it has at least one opencode session, or no
+  // sessions at all (new project). Claude Code-only projects are monitor-only.
+  const dispatchableProjects = useMemo(
+    () =>
+      projects.filter(
+        (p) =>
+          p.sessions.length === 0 ||
+          p.sessions.some((s) => s.agentType === 'opencode')
+      ),
+    [projects]
+  )
+
   const target = useMemo(
-    () => projects.find((p) => p.path === targetPath) ?? projects[0] ?? null,
-    [targetPath, projects]
+    () =>
+      dispatchableProjects.find((p) => p.path === targetPath) ??
+      dispatchableProjects[0] ??
+      null,
+    [targetPath, dispatchableProjects]
   )
 
   // Default target + focus on open.
@@ -213,14 +229,22 @@ export function CmdKDispatch({
             onChange={(e) => setTargetPath(e.target.value)}
             style={selectStyle}
           >
-            {projects.length === 0 && <option value="">(no projects)</option>}
-            {projects.map((p) => (
+            {dispatchableProjects.length === 0 && <option value="">(no projects)</option>}
+            {dispatchableProjects.map((p) => (
               <option key={p.path} value={p.path}>
                 {p.name}
               </option>
             ))}
           </select>
           <span style={{ color: 'var(--fg-subtle)' }}>· opencode · New session</span>
+          {projects.length > dispatchableProjects.length && (
+            <span
+              title="Claude Code sessions are monitor-only and cannot receive dispatches"
+              style={{ color: 'var(--fg-subtle)', fontSize: 10, cursor: 'help' }}
+            >
+              🔒 {projects.length - dispatchableProjects.length} monitor-only
+            </span>
+          )}
         </div>
 
         {error && (

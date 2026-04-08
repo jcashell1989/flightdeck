@@ -6,9 +6,16 @@ export interface OpencodeInstance {
   label?: string
 }
 
+export interface ProjectConfig {
+  path: string
+  name?: string
+  archived: boolean
+}
+
 export interface AppConfig {
   opencode: { instances: OpencodeInstance[] }
   mock: { enabled: boolean }
+  projects: ProjectConfig[]
 }
 
 export interface PendingPermissionPayload {
@@ -27,7 +34,7 @@ export interface OpencodeSnapshotPayload {
     path: string
     sessions: Array<{
       id: string
-      agentType: 'opencode'
+      agentType: 'opencode' | 'claude-code'
       state: 'running' | 'idle' | 'approval' | 'question' | 'error'
       currentAction: string
       startedAt: number
@@ -101,5 +108,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }): Promise<{ sessionId: string }> => ipcRenderer.invoke('opencode:session:create', args),
     getDiff: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('opencode:diff', path),
     getTodo: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('opencode:todo', path)
+  },
+  project: {
+    validate: (path: string): Promise<{ valid: boolean; reason?: string; isGitRepo?: boolean }> =>
+      ipcRenderer.invoke('project:validate', path),
+    browse: (): Promise<string | null> => ipcRenderer.invoke('project:browse'),
+    add: (args: { path: string; name?: string; gitInit?: boolean }): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('project:add', args),
+    archive: (path: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('project:archive', path),
+    restore: (path: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('project:restore', path),
+    delete: (path: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('project:delete', path)
   }
 })
