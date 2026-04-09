@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AgentProfile, AppConfig, OpencodeInstance } from '../types'
 
 interface SettingsProps {
@@ -452,18 +453,63 @@ function ConfirmDialog({
   onCancel: () => void
   onConfirm: () => void
 }) {
+  const cancelBtnRef = useRef<HTMLButtonElement | null>(null)
+  const confirmBtnRef = useRef<HTMLButtonElement | null>(null)
+
+  // Esc handler in capture phase + stopPropagation so the app-wide Esc
+  // shortcut (useKeyboardNav → App.onEscape) does not also fire and close
+  // unrelated panel state.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel()
+      if (e.key === 'Escape') {
+        // stopImmediatePropagation: useKeyboardNav registers its own
+        // window-level bubble listener for Escape. Since both listeners
+        // attach to window, stopPropagation is insufficient — we need
+        // stopImmediate to prevent the App.onEscape cascade from firing.
+        e.stopImmediatePropagation()
+        e.preventDefault()
+        onCancel()
+      }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [onCancel])
+
+  // Focus Cancel on mount — safer default for a destructive confirmation
+  // than autoFocusing Delete, which turns habitual Enter-to-dismiss into
+  // an unrecoverable destroy.
+  useEffect(() => {
+    cancelBtnRef.current?.focus()
+  }, [])
+
+  // Minimal focus trap: Tab / Shift+Tab cycles between Cancel and Confirm.
+  // Two buttons is the entire focusable surface of this dialog, so a full
+  // querySelectorAll trap would be overkill.
+  const handleTrapKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Tab') return
+    const cancel = cancelBtnRef.current
+    const confirm = confirmBtnRef.current
+    if (!cancel || !confirm) return
+    if (e.shiftKey) {
+      if (document.activeElement === cancel) {
+        e.preventDefault()
+        confirm.focus()
+      }
+    } else {
+      if (document.activeElement === confirm) {
+        e.preventDefault()
+        cancel.focus()
+      }
+    }
+  }
+
   return (
     <div
       role="dialog"
       aria-modal="true"
+      aria-labelledby="confirm-dialog-title"
       onClick={onCancel}
+      onKeyDown={handleTrapKey}
       style={{
         position: 'fixed',
         inset: 0,
@@ -487,10 +533,11 @@ function ConfirmDialog({
           fontSize: 13
         }}
       >
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>{title}</div>
+        <div id="confirm-dialog-title" style={{ fontWeight: 600, marginBottom: 8 }}>{title}</div>
         <div style={{ color: 'var(--fg-subtle)', marginBottom: 16 }}>{body}</div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button
+            ref={cancelBtnRef}
             onClick={onCancel}
             style={{
               padding: '6px 12px',
@@ -505,8 +552,8 @@ function ConfirmDialog({
             Cancel
           </button>
           <button
+            ref={confirmBtnRef}
             onClick={onConfirm}
-            autoFocus
             style={{
               padding: '6px 12px',
               background: 'var(--status-error, #c33)',
