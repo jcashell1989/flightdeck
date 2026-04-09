@@ -5,6 +5,7 @@ interface TopBarProps {
   sessions: Session[]
   connectionStatus?: ConnectionStatus
   onCmdKClick?: () => void
+  onAttentionClick?: () => void
 }
 
 // Grace period (ms) before showing the "connecting" banner on cold start.
@@ -16,7 +17,7 @@ const CONNECTING_BANNER_GRACE_MS = 600
 const isMac = typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('mac')
 const TITLE_INSET = isMac ? 68 : 12
 
-export function TopBar({ sessions, connectionStatus = 'disabled', onCmdKClick }: TopBarProps) {
+export function TopBar({ sessions, connectionStatus = 'disabled', onCmdKClick, onAttentionClick }: TopBarProps) {
   const attentionCount = sessions.filter((s) => isAttention(s.state)).length
   const runningCount = sessions.filter((s) => s.state === 'running').length
 
@@ -77,18 +78,28 @@ export function TopBar({ sessions, connectionStatus = 'disabled', onCmdKClick }:
           </span>
         )}
         {attentionCount > 0 && (
-          <span
+          <button
+            type="button"
+            onClick={onAttentionClick}
+            disabled={!onAttentionClick}
+            aria-label={`${attentionCount} session${attentionCount === 1 ? '' : 's'} need attention — open attention-filtered view`}
+            title="Show sessions needing attention (A)"
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 4,
               color: 'var(--status-approval)',
               fontSize: 12,
-              fontWeight: 500
+              fontWeight: 500,
+              background: 'transparent',
+              border: 'none',
+              padding: '2px 6px',
+              borderRadius: 3,
+              cursor: onAttentionClick ? 'pointer' : 'default'
             }}
           >
             ⚠ {attentionCount}
-          </span>
+          </button>
         )}
 
         <button

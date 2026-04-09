@@ -1,65 +1,26 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Project, Session, SessionState, isAttention } from '../types'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useMemo, useState } from 'react'
+import { Project, Session, isAttention } from '../types'
 import { StatusDot } from '../components/StatusDot'
+import { STATUS_LABELS, SortKey, FlatSession, compareBy } from './sessionsSort'
 
 interface SessionsProps {
   projects: Project[]
   onSessionClick: (session: Session) => void
+  attentionOnly: boolean
+  setAttentionOnly: (value: boolean | ((prev: boolean) => boolean)) => void
 }
 
-const STATUS_LABELS: Record<SessionState, string> = {
-  running: 'Running',
-  idle: 'Idle',
-  approval: 'Needs Approval',
-  question: 'Has Question',
-  review: 'Review Changes',
-  error: 'Error'
-}
-
-type SortKey = 'status' | 'agent' | 'id' | 'project' | 'action' | 'activity'
 type SortDir = 'asc' | 'desc'
 
-interface FlatSession extends Session {
-  projectName: string
-}
-
-function compareBy(a: FlatSession, b: FlatSession, key: SortKey): number {
-  switch (key) {
-    case 'status':
-      return STATUS_LABELS[a.state].localeCompare(STATUS_LABELS[b.state])
-    case 'agent':
-      return a.agentType.localeCompare(b.agentType)
-    case 'id':
-      return a.id.localeCompare(b.id)
-    case 'project':
-      return a.projectName.localeCompare(b.projectName)
-    case 'action':
-      return (a.currentAction ?? '').localeCompare(b.currentAction ?? '')
-    case 'activity':
-      return a.lastActivity - b.lastActivity
-  }
-}
-
-export function Sessions({ projects, onSessionClick }: SessionsProps) {
+export function Sessions({ projects, onSessionClick, attentionOnly, setAttentionOnly }: SessionsProps) {
   const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
-  const [attentionOnly, setAttentionOnly] = useState(false)
 
-  // 'A' keyboard shortcut toggles the attention filter (spec-ux §7).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'a' && e.key !== 'A') return
-      const target = e.target as HTMLElement | null
-      if (target) {
-        const tag = target.tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return
-      }
-      e.preventDefault()
-      setAttentionOnly((v) => !v)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  // Note: the global 'A' keyboard shortcut (spec-ux §7) is handled by
+  // useKeyboardNav → App.onAttentionFilter, which navigates here AND sets
+  // attentionOnly=true. Keeping the state lifted to App ensures a single
+  // A press from any view lands on the filtered Sessions view.
 
   const allSessions = useMemo<FlatSession[]>(() => {
     const flat: FlatSession[] = projects.flatMap((p) =>
@@ -105,6 +66,18 @@ export function Sessions({ projects, onSessionClick }: SessionsProps) {
     userSelect: 'none' as const
   }
 
+  const headerKey = (key: SortKey) => (e: ReactKeyboardEvent<HTMLTableCellElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handleHeaderClick(key)
+    }
+  }
+
+  const ariaSort = (key: SortKey): 'ascending' | 'descending' | 'none' => {
+    if (sortKey !== key) return 'none'
+    return sortDir === 'asc' ? 'ascending' : 'descending'
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 12 }}>
@@ -134,11 +107,11 @@ export function Sessions({ projects, onSessionClick }: SessionsProps) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
         <thead>
           <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--fg-subtle)', textAlign: 'left' }}>
-            <th style={headerCellStyle} onClick={() => handleHeaderClick('status')}>Status{sortIndicator('status')}</th>
-            <th style={headerCellStyle} onClick={() => handleHeaderClick('agent')}>Agent{sortIndicator('agent')}</th>
-            <th style={headerCellStyle} onClick={() => handleHeaderClick('id')}>ID{sortIndicator('id')}</th>
-            <th style={headerCellStyle} onClick={() => handleHeaderClick('project')}>Project{sortIndicator('project')}</th>
-            <th style={headerCellStyle} onClick={() => handleHeaderClick('action')}>Action{sortIndicator('action')}</th>
+            <th scope="col" role="columnheader" tabIndex={0} aria-sort={ariaSort('status')} style={headerCellStyle} onClick={() => handleHeaderClick('status')} onKeyDown={headerKey('status')}>Status{sortIndicator('status')}</th>
+            <th scope="col" role="columnheader" tabIndex={0} aria-sort={ariaSort('agent')} style={headerCellStyle} onClick={() => handleHeaderClick('agent')} onKeyDown={headerKey('agent')}>Agent{sortIndicator('agent')}</th>
+            <th scope="col" role="columnheader" tabIndex={0} aria-sort={ariaSort('id')} style={headerCellStyle} onClick={() => handleHeaderClick('id')} onKeyDown={headerKey('id')}>ID{sortIndicator('id')}</th>
+            <th scope="col" role="columnheader" tabIndex={0} aria-sort={ariaSort('project')} style={headerCellStyle} onClick={() => handleHeaderClick('project')} onKeyDown={headerKey('project')}>Project{sortIndicator('project')}</th>
+            <th scope="col" role="columnheader" tabIndex={0} aria-sort={ariaSort('action')} style={headerCellStyle} onClick={() => handleHeaderClick('action')} onKeyDown={headerKey('action')}>Action{sortIndicator('action')}</th>
           </tr>
         </thead>
         <tbody>

@@ -23,6 +23,7 @@ export function App() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [fullScreen, setFullScreen] = useState(false)
   const [cmdKOpen, setCmdKOpen] = useState(false)
+  const [attentionOnly, setAttentionOnly] = useState(false)
   // Pre-selected project path for ⌘K (set by "+ New Session" button)
   const cmdKPresetPath = useRef<string | null>(null)
 
@@ -120,6 +121,13 @@ export function App() {
     if (api) void api.getSnapshot()
   }, [])
 
+  // Shared destination for the 'A' keyboard shortcut and the top-bar ⚠ badge:
+  // jump to the Sessions view with the attention filter active (spec-ux §1, §7).
+  const handleAttentionJump = useCallback(() => {
+    handleViewChange('sessions')
+    setAttentionOnly(true)
+  }, [handleViewChange])
+
   useKeyboardNav({
     onViewChange: handleViewChange,
     onFocusNext: () => {
@@ -132,7 +140,7 @@ export function App() {
     onEnter: () => setPanelOpen(true),
     onToggleFullScreen: handleToggleFullScreen,
     onOpenCmdK: () => setCmdKOpen(true),
-    onAttentionFilter: () => handleViewChange('sessions'),
+    onAttentionFilter: handleAttentionJump,
     onRefresh: handleRefresh,
     isModalOpen: cmdKOpen
   })
@@ -143,6 +151,7 @@ export function App() {
         sessions={allSessions}
         connectionStatus={connectionStatus}
         onCmdKClick={() => setCmdKOpen(true)}
+        onAttentionClick={handleAttentionJump}
       />
       <div className="app-body">
         {!fullScreen && <NavRail activeView={activeView} onViewChange={handleViewChange} />}
@@ -191,7 +200,12 @@ export function App() {
               />
             )}
             {activeView === 'sessions' && (
-              <Sessions projects={projects} onSessionClick={handleSessionClick} />
+              <Sessions
+                projects={projects}
+                onSessionClick={handleSessionClick}
+                attentionOnly={attentionOnly}
+                setAttentionOnly={setAttentionOnly}
+              />
             )}
             {activeView === 'projects' && <Projects projects={projects} config={config} />}
             {activeView === 'settings' && <Settings config={config} setConfig={setConfig} />}
