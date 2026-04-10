@@ -14,6 +14,7 @@ export type {
   AppConfig,
   CommandDefinition,
   ConnectionStatus,
+  GitStatusResult,
   MessageRecord,
   OpencodeInstance,
   OpencodeSnapshotPayload,

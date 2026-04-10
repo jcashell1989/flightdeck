@@ -59,7 +59,7 @@ export function register(): void {
   /** Add a project to the config. Optionally git-init the directory. */
   safeHandle(
     'project:add',
-    async (_e, args: { path: string; name?: string; gitInit?: boolean }) => {
+    async (_e, args: { path: string; name?: string; gitInit?: boolean; defaultAgent?: ProjectConfig['defaultAgent'] }) => {
       if (!validPath(args.path)) throw new Error('invalid path')
       const cfg = configStore.get()
       if (cfg.projects.some((p) => p.path === args.path)) {
@@ -76,12 +76,31 @@ export function register(): void {
       const project: ProjectConfig = {
         path: args.path,
         name: args.name,
-        archived: false
+        archived: false,
+        defaultAgent: args.defaultAgent
       }
       await configStore.set({ projects: [...cfg.projects, project] })
       return { ok: true }
     }
   )
+
+  /** Get git status for a project directory. */
+  safeHandle('project:gitStatus', async (_e, path: string) => {
+    if (!validPath(path)) return { branch: '', dirty: false, ahead: 0, behind: 0 }
+    const [branchRes, statusRes, aheadRes, behindRes] = await Promise.all([
+      runCmd('git', ['branch', '--show-current'], path),
+      runCmd('git', ['status', '--porcelain'], path),
+      runCmd('git', ['rev-list', '--count', '@{u}..HEAD'], path).catch(() => ({ stdout: '0', stderr: '', code: 0 })),
+      runCmd('git', ['rev-list', '--count', 'HEAD..@{u}'], path).catch(() => ({ stdout: '0', stderr: '', code: 0 }))
+    ])
+    if (branchRes.code !== 0) return { branch: '', dirty: false, ahead: 0, behind: 0 }
+    return {
+      branch: branchRes.stdout.trim(),
+      dirty: statusRes.stdout.trim().length > 0,
+      ahead: parseInt(aheadRes.stdout.trim(), 10) || 0,
+      behind: parseInt(behindRes.stdout.trim(), 10) || 0
+    }
+  })
 
   /** Archive (soft-delete) a project. */
   safeHandle('project:archive', async (_e, path: string) => {

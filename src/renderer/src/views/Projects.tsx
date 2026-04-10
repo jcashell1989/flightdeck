@@ -1,5 +1,47 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppConfig, Project, ProjectConfig } from '../types'
+import { AppConfig, GitStatusResult, Project, ProjectConfig } from '../types'
+
+type SortKey = 'name' | 'activity' | 'sessions'
+type FilterKey = 'all' | 'active' | 'archived'
+
+function baseName(path: string): string {
+  return path.split('/').filter(Boolean).pop() ?? path
+}
+
+function lastActivity(project: ProjectConfig, sessions: Project[]): number {
+  const s = sessions.find((p) => p.path === project.path)
+  if (!s || s.sessions.length === 0) return 0
+  return Math.max(...s.sessions.map((x) => x.lastActivity))
+}
+
+function sessionCount(project: ProjectConfig, sessions: Project[]): number {
+  return sessions.find((p) => p.path === project.path)?.sessions.length ?? 0
+}
+
+function sortedProjects(
+  projects: ProjectConfig[],
+  sessions: Project[],
+  sort: SortKey
+): ProjectConfig[] {
+  const copy = [...projects]
+  if (sort === 'name') {
+    copy.sort((a, b) => (a.name ?? baseName(a.path)).localeCompare(b.name ?? baseName(b.path)))
+  } else if (sort === 'sessions') {
+    copy.sort((a, b) => sessionCount(b, sessions) - sessionCount(a, sessions))
+  } else {
+    copy.sort((a, b) => lastActivity(b, sessions) - lastActivity(a, sessions))
+  }
+  return copy
+}
+
+function formatActivity(ts: number): string {
+  if (ts === 0) return 'no activity'
+  const diff = Math.floor((Date.now() - ts) / 1000)
+  if (diff < 60) return 'just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
+}
 
 interface ProjectsProps {
   projects: Project[]
@@ -30,6 +72,7 @@ function AddProjectDrawer({
   onAdded: () => void
 }) {
   const [path, setPath] = useState('')
+  const [defaultAgent, setDefaultAgent] = useState<ProjectConfig['defaultAgent']>('auto')
 
   // Esc closes the drawer (mirrors the App-level escape handler but scoped to the drawer).
   useEffect(() => {
@@ -92,7 +135,8 @@ function AddProjectDrawer({
       await api.add({
         path: path.trim(),
         name: displayName.trim() || undefined,
-        gitInit: validation.isGitRepo === false
+        gitInit: validation.isGitRepo === false,
+        defaultAgent: defaultAgent === 'auto' ? undefined : defaultAgent
       })
       onAdded()
       onClose()
@@ -197,6 +241,25 @@ function AddProjectDrawer({
         {validationText && (
           <span style={{ fontSize: 11, color: validationColor }}>{validationText}</span>
         )}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label style={{ color: 'var(--fg-muted)', fontWeight: 500 }}>Default Agent</label>
+        <div style={{ display: 'flex', gap: 16 }}>
+          {(['auto', 'opencode', 'claude-code'] as const).map((opt) => (
+            <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 12 }}>
+              <input
+                type="radio"
+                name="drawer-default-agent"
+                value={opt}
+                checked={defaultAgent === opt}
+                onChange={() => setDefaultAgent(opt)}
+                style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
+              />
+              {opt}
+            </label>
+          ))}
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -359,6 +422,27 @@ export function Projects({ projects, config }: ProjectsProps) {
   const [archivedExpanded, setArchivedExpanded] = useState(false)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [menuOpenPath, setMenuOpenPath] = useState<string | null>(null)
+  const [filter, setFilter] = useState<FilterKey>('all')
+  const [sort, setSort] = useState<SortKey>('activity')
+  const [gitStatuses, setGitStatuses] = useState<Map<string, GitStatusResult>>(new Map())
+
+  // Fetch git status for all active projects (fire-and-forget, best-effort).
+  const configProjects = config?.projects ?? []
+  useEffect(() => {
+    const api = window.electronAPI?.project
+    if (!api?.gitStatus) return
+    for (const p of configProjects.filter((c) => !c.archived)) {
+      void api.gitStatus(p.path).then((result) => {
+        setGitStatuses((prev) => {
+          const next = new Map(prev)
+          next.set(p.path, result)
+          return next
+        })
+      }).catch(() => undefined)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configProjects.map((p) => p.path).join('|')])
 
   // Dismiss toast on unmount.
   useEffect(() => {
@@ -389,9 +473,16 @@ export function Projects({ projects, config }: ProjectsProps) {
   }, [])
 
   // Build project rows from config, enriched with live session data.
-  const configProjects = config?.projects ?? []
-  const activeProjects = configProjects.filter((p) => !p.archived)
+  const allActive = configProjects.filter((p) => !p.archived)
   const archivedProjects = configProjects.filter((p) => p.archived)
+
+  const activeProjects = sortedProjects(
+    filter === 'archived' ? [] :
+    filter === 'active' ? allActive.filter((p) => (projects.find((x) => x.path === p.path)?.sessions.length ?? 0) > 0) :
+    allActive,
+    projects,
+    sort
+  )
 
   const getLiveSessions = (path: string) =>
     projects.find((p) => p.path === path)?.sessions ?? []
@@ -404,7 +495,7 @@ export function Projects({ projects, config }: ProjectsProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: 16
+          marginBottom: 10
         }}
       >
         <h2 style={{ fontSize: 16, fontWeight: 500 }}>Projects</h2>
@@ -425,6 +516,29 @@ export function Projects({ projects, config }: ProjectsProps) {
         </button>
       </div>
 
+      {/* Filter / Sort toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, fontSize: 12 }}>
+        <span style={{ color: 'var(--fg-subtle)' }}>Filter:</span>
+        <select
+          value={filter}
+          onChange={(e) => setFilter(e.target.value as FilterKey)}
+          style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--fg-primary)', padding: '3px 6px', fontSize: 12, cursor: 'pointer' }}
+        >
+          <option value="all">all</option>
+          <option value="active">active</option>
+        </select>
+        <span style={{ color: 'var(--fg-subtle)', marginLeft: 8 }}>Sort:</span>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortKey)}
+          style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--fg-primary)', padding: '3px 6px', fontSize: 12, cursor: 'pointer' }}
+        >
+          <option value="activity">recent activity</option>
+          <option value="name">name</option>
+          <option value="sessions">session count</option>
+        </select>
+      </div>
+
       {/* Active projects */}
       {activeProjects.length === 0 && (
         <div style={{ color: 'var(--fg-subtle)', fontSize: 12, padding: '24px 0' }}>
@@ -436,9 +550,12 @@ export function Projects({ projects, config }: ProjectsProps) {
         {activeProjects.map((project) => {
           const liveSessions = getLiveSessions(project.path)
           const activeCount = liveSessions.filter((s) => s.state === 'running').length
-          const agentTypes = [...new Set(liveSessions.map((s) => s.agentType))]
-          const name = project.name ?? project.path.split('/').filter(Boolean).pop() ?? project.path
+          const name = project.name ?? baseName(project.path)
           const isDeleting = deleteTarget === project.path
+          const isMenuOpen = menuOpenPath === project.path
+          const git = gitStatuses.get(project.path)
+          const activity = lastActivity(project, projects)
+          const defAgent = project.defaultAgent ?? 'auto'
 
           return (
             <div
@@ -450,9 +567,8 @@ export function Projects({ projects, config }: ProjectsProps) {
                 backgroundColor: 'var(--bg-panel)'
               }}
             >
-              <div
-                style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}
-              >
+              {/* Row 1: name + path */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
                 <span style={{ fontWeight: 500 }}>{name}</span>
                 <span
                   className="mono"
@@ -470,66 +586,74 @@ export function Projects({ projects, config }: ProjectsProps) {
                   {project.path}
                 </span>
               </div>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  fontSize: 11,
-                  color: 'var(--fg-subtle)'
-                }}
-              >
+
+              {/* Row 2: session count + agent + git + last activity + ⚙ menu */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: 'var(--fg-subtle)' }}>
                 {activeCount > 0 ? (
-                  <span style={{ color: 'var(--status-running)' }}>
-                    ● {activeCount} active
-                  </span>
+                  <span style={{ color: 'var(--status-running)' }}>● {activeCount} active</span>
                 ) : (
                   <span>{liveSessions.length} sessions</span>
                 )}
-                {agentTypes.map((t) => (
-                  <span
-                    key={t}
-                    style={{
-                      padding: '1px 6px',
-                      border: '1px solid var(--border)',
-                      borderRadius: 3,
-                      fontSize: 10
-                    }}
-                  >
-                    {t}
+
+                <span style={{ padding: '1px 6px', border: '1px solid var(--border)', borderRadius: 3, fontSize: 10 }}>
+                  {defAgent}
+                </span>
+
+                {git && git.branch && (
+                  <span className="mono" style={{ fontSize: 10 }}>
+                    {git.branch}{git.dirty ? ' ·dirty' : ' ·clean'}{git.ahead > 0 ? ` ↑${git.ahead}` : ''}{git.behind > 0 ? ` ↓${git.behind}` : ''}
                   </span>
-                ))}
+                )}
+
+                <span>{formatActivity(activity)}</span>
+
                 <div style={{ flex: 1 }} />
-                <button
-                  onClick={() => setDeleteTarget(isDeleting ? null : project.path)}
-                  style={{
-                    padding: '2px 8px',
-                    fontSize: 11,
-                    border: '1px solid var(--border)',
-                    borderRadius: 4,
-                    background: 'transparent',
-                    color: 'var(--fg-subtle)',
-                    cursor: 'pointer'
-                  }}
-                  aria-label="Project settings"
-                >
-                  ⚙
-                </button>
-                <button
-                  onClick={() => handleArchive(project)}
-                  style={{
-                    padding: '2px 8px',
-                    fontSize: 11,
-                    border: '1px solid var(--border)',
-                    borderRadius: 4,
-                    background: 'transparent',
-                    color: 'var(--fg-subtle)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Archive
-                </button>
+
+                {/* ⚙ dropdown */}
+                <div style={{ position: 'relative' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setMenuOpenPath(isMenuOpen ? null : project.path)
+                      setDeleteTarget(null)
+                    }}
+                    style={{ padding: '2px 8px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'var(--fg-subtle)', cursor: 'pointer' }}
+                    aria-label="Project settings"
+                  >
+                    ⚙
+                  </button>
+                  {isMenuOpen && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: 0,
+                        top: '100%',
+                        marginTop: 4,
+                        backgroundColor: 'var(--bg-elevated, var(--bg-panel))',
+                        border: '1px solid var(--border)',
+                        borderRadius: 4,
+                        zIndex: 100,
+                        minWidth: 160,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.25)'
+                      }}
+                    >
+                      <button
+                        onClick={() => { setMenuOpenPath(null); handleArchive(project) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', fontSize: 12, background: 'transparent', border: 'none', color: 'var(--fg-primary)', cursor: 'pointer' }}
+                      >
+                        Archive
+                      </button>
+                      <button
+                        onClick={() => { setMenuOpenPath(null); setDeleteTarget(isDeleting ? null : project.path) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', fontSize: 12, background: 'transparent', border: 'none', color: 'var(--status-error)', cursor: 'pointer' }}
+                      >
+                        Delete project and history
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
+
               {isDeleting && (
                 <DeleteConfirm
                   project={project}

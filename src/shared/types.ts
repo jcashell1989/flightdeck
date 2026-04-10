@@ -24,6 +24,15 @@ export interface ProjectConfig {
   name?: string
   /** Soft-deleted projects are hidden from the dashboard but preserved */
   archived: boolean
+  /** Default agent type for sessions in this project */
+  defaultAgent?: 'opencode' | 'claude-code' | 'auto'
+}
+
+export interface GitStatusResult {
+  branch: string
+  dirty: boolean
+  ahead: number
+  behind: number
 }
 
 export interface AgentProfile {

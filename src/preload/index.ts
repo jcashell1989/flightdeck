@@ -3,9 +3,11 @@ import type {
   AgentProfile,
   AppConfig,
   CommandDefinition,
+  GitStatusResult,
   MessageRecord,
   OpencodeSnapshotPayload,
   ProcessResult,
+  ProjectConfig,
   ProjectValidationResult
 } from '../shared/types'
 
@@ -61,8 +63,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     validate: (path: string): Promise<ProjectValidationResult> =>
       ipcRenderer.invoke('project:validate', path),
     browse: (): Promise<string | null> => ipcRenderer.invoke('project:browse'),
-    add: (args: { path: string; name?: string; gitInit?: boolean }): Promise<{ ok: boolean }> =>
+    add: (args: { path: string; name?: string; gitInit?: boolean; defaultAgent?: ProjectConfig['defaultAgent'] }): Promise<{ ok: boolean }> =>
       ipcRenderer.invoke('project:add', args),
+    gitStatus: (path: string): Promise<GitStatusResult> =>
+      ipcRenderer.invoke('project:gitStatus', path),
     archive: (path: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('project:archive', path),
     restore: (path: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('project:restore', path),
     delete: (path: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('project:delete', path)

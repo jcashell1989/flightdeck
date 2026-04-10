@@ -2,9 +2,11 @@ import type {
   AgentProfile,
   AppConfig,
   CommandDefinition,
+  GitStatusResult,
   MessageRecord,
   OpencodeSnapshotPayload,
   ProcessResult,
+  ProjectConfig,
   ProjectValidationResult
 } from './types'
 
@@ -45,7 +47,8 @@ export interface ElectronAPI {
   project: {
     validate: (path: string) => Promise<ProjectValidationResult>
     browse: () => Promise<string | null>
-    add: (args: { path: string; name?: string; gitInit?: boolean }) => Promise<{ ok: boolean }>
+    add: (args: { path: string; name?: string; gitInit?: boolean; defaultAgent?: ProjectConfig['defaultAgent'] }) => Promise<{ ok: boolean }>
+    gitStatus: (path: string) => Promise<GitStatusResult>
     archive: (path: string) => Promise<{ ok: boolean }>
     restore: (path: string) => Promise<{ ok: boolean }>
     delete: (path: string) => Promise<{ ok: boolean }>
