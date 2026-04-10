@@ -4,6 +4,7 @@ import { StatusDot } from './StatusDot'
 import type { MessageRecord, ProcessResult } from '../electronAPI'
 import { useSessionDetail } from '../hooks/useSessionDetail'
 import { parseSlashCommand } from '../../../shared/commandParser'
+import { CommandPalette, type CommandPaletteHandle } from './CommandPalette'
 
 interface ContextPanelProps {
   session: Session | null
@@ -170,6 +171,8 @@ function ConversationTab({
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const paletteRef = useRef<CommandPaletteHandle | null>(null)
 
   // Auto-scroll to bottom when new messages land OR when streaming tokens
   // extend the last message. Depending only on messages.length misses
@@ -271,37 +274,55 @@ function ConversationTab({
             {sendError}
           </div>
         )}
-        <textarea
-          value={replyDraft}
-          onChange={(e) => setReplyDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              void handleSend()
+        <div style={{ position: 'relative' }}>
+          <CommandPalette
+            ref={paletteRef}
+            sessionId={session.id}
+            inputValue={replyDraft}
+            onComplete={(completed) => {
+              setReplyDraft(completed)
+              textareaRef.current?.focus()
+            }}
+            onDismiss={() => {
+              setReplyDraft('')
+              textareaRef.current?.focus()
+            }}
+          />
+          <textarea
+            ref={textareaRef}
+            value={replyDraft}
+            onChange={(e) => setReplyDraft(e.target.value)}
+            onKeyDown={(e) => {
+              // Forward navigation/completion/dismiss keys to the palette first
+              if (paletteRef.current?.handleKey(e)) return
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                void handleSend()
+              }
+            }}
+            placeholder={
+              useMock
+                ? 'Reply disabled in mock mode'
+                : canReply
+                  ? 'Reply to agent… (Enter to send, Shift+Enter for newline)'
+                  : `Reply disabled while ${session.state}`
             }
-          }}
-          placeholder={
-            useMock
-              ? 'Reply disabled in mock mode'
-              : canReply
-                ? 'Reply to agent… (Enter to send, Shift+Enter for newline)'
-                : `Reply disabled while ${session.state}`
-          }
-          disabled={!canReply || sending}
-          rows={2}
-          style={{
-            width: '100%',
-            padding: '8px 10px',
-            fontSize: 12,
-            fontFamily: '"Berkeley Mono", "SF Mono", monospace',
-            border: '1px solid var(--border)',
-            borderRadius: 4,
-            backgroundColor: 'var(--bg-base)',
-            color: 'var(--fg-primary)',
-            outline: 'none',
-            resize: 'vertical'
-          }}
-        />
+            disabled={!canReply || sending}
+            rows={2}
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              fontSize: 12,
+              fontFamily: '"Berkeley Mono", "SF Mono", monospace',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              backgroundColor: 'var(--bg-base)',
+              color: 'var(--fg-primary)',
+              outline: 'none',
+              resize: 'vertical'
+            }}
+          />
+        </div>
       </div>
     </>
   )

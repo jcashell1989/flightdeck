@@ -1,6 +1,7 @@
 import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AgentProfile, AppConfig, Project } from '../types'
 import { parseSlashCommand } from '../../../shared/commandParser'
+import { CommandPalette, type CommandPaletteHandle } from './CommandPalette'
 
 interface CmdKDispatchProps {
   open: boolean
@@ -60,6 +61,7 @@ export function CmdKDispatch({
   // 'new' = create new session; any other value = existing sessionId to append to
   const [sessionMode, setSessionMode] = useState<string>('new')
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const paletteRef = useRef<CommandPaletteHandle | null>(null)
   const useMock = config?.mock.enabled ?? true
 
   // Load opencode profiles on mount.
@@ -267,36 +269,54 @@ export function CmdKDispatch({
           </button>
         </div>
 
-        <textarea
-          ref={textareaRef}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              e.preventDefault()
-              void dispatch()
-            }
-            if (e.key === 'Escape') {
-              e.preventDefault()
-              onClose()
-            }
-          }}
-          placeholder="What should the agent do?"
-          rows={3}
-          style={{
-            width: '100%',
-            padding: '10px 12px',
-            fontSize: 13,
-            fontFamily: '"Berkeley Mono", "SF Mono", monospace',
-            border: '1px solid var(--border)',
-            borderRadius: 6,
-            backgroundColor: 'var(--bg-base)',
-            color: 'var(--fg-primary)',
-            outline: 'none',
-            resize: 'vertical',
-            marginBottom: 10
-          }}
-        />
+        <div style={{ position: 'relative', marginBottom: 10 }}>
+          {sessionMode !== 'new' && (
+            <CommandPalette
+              ref={paletteRef}
+              sessionId={sessionMode}
+              inputValue={prompt}
+              onComplete={(completed) => {
+                setPrompt(completed)
+                textareaRef.current?.focus()
+              }}
+              onDismiss={() => {
+                setPrompt('')
+                textareaRef.current?.focus()
+              }}
+            />
+          )}
+          <textarea
+            ref={textareaRef}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              // Forward navigation/completion/dismiss keys to the palette first
+              if (sessionMode !== 'new' && paletteRef.current?.handleKey(e)) return
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault()
+                void dispatch()
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                onClose()
+              }
+            }}
+            placeholder="What should the agent do?"
+            rows={3}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              fontSize: 13,
+              fontFamily: '"Berkeley Mono", "SF Mono", monospace',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              backgroundColor: 'var(--bg-base)',
+              color: 'var(--fg-primary)',
+              outline: 'none',
+              resize: 'vertical'
+            }}
+          />
+        </div>
 
         <div
           style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 11 }}
