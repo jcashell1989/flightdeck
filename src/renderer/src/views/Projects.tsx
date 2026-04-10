@@ -489,6 +489,13 @@ export function Projects({ projects, config }: ProjectsProps) {
 
   return (
     <div style={{ position: 'relative' }}>
+      {/* Backdrop — closes gear dropdown on outside click */}
+      {menuOpenPath && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+          onClick={() => setMenuOpenPath(null)}
+        />
+      )}
       {/* Header */}
       <div
         style={{
