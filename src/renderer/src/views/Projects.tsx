@@ -429,7 +429,8 @@ export function Projects({ projects, config }: ProjectsProps) {
 
   // Fetch git status for all active projects (fire-and-forget, best-effort).
   const configProjects = config?.projects ?? []
-  useEffect(() => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const fetchGitStatuses = useCallback(() => {
     const api = window.electronAPI?.project
     if (!api?.gitStatus) return
     for (const p of configProjects.filter((c) => !c.archived)) {
@@ -441,8 +442,20 @@ export function Projects({ projects, config }: ProjectsProps) {
         })
       }).catch(() => undefined)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configProjects.map((p) => p.path).join('|')])
+
+  // Initial fetch + re-fetch when project list changes.
+  useEffect(() => { fetchGitStatuses() }, [fetchGitStatuses])
+
+  // Re-fetch on window focus and every 30 s so branch/dirty/ahead data stays current.
+  useEffect(() => {
+    window.addEventListener('focus', fetchGitStatuses)
+    const id = setInterval(fetchGitStatuses, 30_000)
+    return () => {
+      window.removeEventListener('focus', fetchGitStatuses)
+      clearInterval(id)
+    }
+  }, [fetchGitStatuses])
 
   // Dismiss toast on unmount.
   useEffect(() => {
