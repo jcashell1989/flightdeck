@@ -73,6 +73,7 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
   )
 
   safeHandle('opencode:session:command', async (_e, sessionId: string, command: string, args: string) => {
+    if (!/^[a-zA-Z0-9_-]+$/.test(command)) throw new Error(`invalid command name: ${command}`)
     const client = opencodeRegistry.findClientForSession(sessionId)
     if (!client) throw new Error(`no client owns session ${sessionId}`)
     return client.postCommand(sessionId, command, args)
