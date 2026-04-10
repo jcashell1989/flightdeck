@@ -5,6 +5,7 @@ import { is } from '@electron-toolkit/utils'
 import { configStore } from './config/store'
 import { opencodeRegistry } from './opencode/registry'
 import { claudeMonitor } from './claude/monitor'
+import { opencodeFileWatchMonitor } from './adapters/file-watch'
 import { opencodeLauncher } from './opencode/launcher'
 import * as ipcConfig from './ipc/config'
 import * as ipcOpencode from './ipc/opencode'
@@ -78,10 +79,12 @@ app.whenReady().then(async () => {
   // Register IPC AFTER init so handlers never hit an un-initialised store,
   // and so the renderer's config:get cannot race the load.
   registerIpc()
-  // Wire Claude Code monitor into the registry before starting either.
+  // Wire monitors into the registry before starting any of them.
   opencodeRegistry.setClaudeMonitor(claudeMonitor)
+  opencodeRegistry.setOpencodeFileWatch(opencodeFileWatchMonitor)
   opencodeRegistry.start()
   claudeMonitor.start()
+  opencodeFileWatchMonitor.start()
   createWindow()
 })
 
@@ -107,6 +110,7 @@ app.on('before-quit', (event) => {
     try {
       opencodeRegistry.dispose()
       claudeMonitor.dispose()
+      opencodeFileWatchMonitor.dispose()
       await opencodeLauncher.stopAllAsync()
     } catch (e) {
       console.error('[main] error during shutdown:', e)

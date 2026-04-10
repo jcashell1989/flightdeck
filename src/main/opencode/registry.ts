@@ -14,6 +14,7 @@ import { configStore, OpencodeInstance, AppConfig } from '../config/store'
 import type { NormalizedProject, InstanceSnapshot, InstanceConnectionStatus } from './types'
 import type { ClaudeMonitor } from '../claude/monitor'
 import type { ClaudeProject } from '../claude/types'
+import type { OpencodeFileWatchMonitor } from '../adapters/file-watch'
 
 function keyOf(inst: OpencodeInstance): string {
   return `${inst.host}:${inst.port}`
@@ -32,6 +33,7 @@ export class OpencodeRegistry extends EventEmitter {
   // so we avoid re-iterating all Claude sessions on every aggregate snapshot call.
   private _claudeSnapCache: ReturnType<ClaudeMonitor['getSnapshot']> | null = null
   private _claudeSnapDirty = true
+  private opencodeFileWatch: OpencodeFileWatchMonitor | null = null
   /**
    * Serialises sync() calls. Rapid back-to-back config changes (e.g. the
    * user mashing "save" in Settings) used to race and leak clients because
@@ -48,6 +50,12 @@ export class OpencodeRegistry extends EventEmitter {
       this._claudeSnapDirty = true
       this.emit('change')
     })
+  }
+
+  /** Wire in the opencode file-watch monitor (td-838cbc). Call before start(). */
+  setOpencodeFileWatch(monitor: OpencodeFileWatchMonitor): void {
+    this.opencodeFileWatch = monitor
+    monitor.on('change', () => this.emit('change'))
   }
 
   start(): void {
@@ -142,6 +150,18 @@ export class OpencodeRegistry extends EventEmitter {
       }
       for (const claudeProject of this._claudeSnapCache.projects) {
         this.mergeClaudeProject(projects, claudeProject)
+      }
+    }
+
+    // Merge externally-watched opencode TUI sessions (td-838cbc).
+    if (this.opencodeFileWatch) {
+      for (const p of this.opencodeFileWatch.getSnapshot()) {
+        const existing = projects.find((ep) => ep.path === p.path)
+        if (existing) {
+          existing.sessions.push(...p.sessions)
+        } else {
+          projects.push(p)
+        }
       }
     }
 
