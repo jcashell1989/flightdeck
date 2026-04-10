@@ -54,9 +54,7 @@ export function mockMessages(sessionId: string): MessageRecord[] {
 }
 
 
-// NOTE (R-L7): using a function so relative timestamps stay accurate over long
-// app sessions rather than drifting from a fixed module-load baseline.
-const now = () => Date.now()
+const now = Date.now()
 
 export const mockProjects: Project[] = [
   {
@@ -69,8 +67,8 @@ export const mockProjects: Project[] = [
         agentType: 'opencode',
         state: 'running',
         currentAction: 'editing src/middleware/auth.ts',
-        startedAt: now() - 134_000,
-        lastActivity: now() - 12_000,
+        startedAt: now - 134_000,
+        lastActivity: now - 12_000,
         projectId: 'auth-service'
       },
       {
@@ -78,8 +76,8 @@ export const mockProjects: Project[] = [
         agentType: 'opencode',
         state: 'approval',
         currentAction: 'waiting: approve shell command `npm test`',
-        startedAt: now() - 300_000,
-        lastActivity: now() - 45_000,
+        startedAt: now - 300_000,
+        lastActivity: now - 45_000,
         projectId: 'auth-service'
       },
       {
@@ -87,8 +85,8 @@ export const mockProjects: Project[] = [
         agentType: 'claude-code',
         state: 'question',
         currentAction: 'asking: which auth provider to use?',
-        startedAt: now() - 180_000,
-        lastActivity: now() - 60_000,
+        startedAt: now - 180_000,
+        lastActivity: now - 60_000,
         projectId: 'auth-service'
       }
     ]
@@ -103,8 +101,8 @@ export const mockProjects: Project[] = [
         agentType: 'opencode',
         state: 'idle',
         currentAction: 'idle — last action: ran tests',
-        startedAt: now() - 600_000,
-        lastActivity: now() - 120_000,
+        startedAt: now - 600_000,
+        lastActivity: now - 120_000,
         projectId: 'api-gateway'
       },
       {
@@ -112,8 +110,8 @@ export const mockProjects: Project[] = [
         agentType: 'opencode',
         state: 'error',
         currentAction: 'failed: npm run build exited with code 1',
-        startedAt: now() - 900_000,
-        lastActivity: now() - 800_000,
+        startedAt: now - 900_000,
+        lastActivity: now - 800_000,
         projectId: 'api-gateway'
       }
     ]
@@ -128,8 +126,8 @@ export const mockProjects: Project[] = [
         agentType: 'claude-code',
         state: 'idle',
         currentAction: 'idle — completed: refactored login component',
-        startedAt: now() - 1_200_000,
-        lastActivity: now() - 1_100_000,
+        startedAt: now - 1_200_000,
+        lastActivity: now - 1_100_000,
         projectId: 'frontend-app'
       }
     ]

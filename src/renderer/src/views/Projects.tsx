@@ -442,7 +442,8 @@ export function Projects({ projects, config }: ProjectsProps) {
         })
       }).catch(() => undefined)
     }
-  }, [configProjects.map((p) => p.path).join('|')])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(configProjects.map((p) => p.path))])
 
   // Initial fetch + re-fetch when project list changes.
   useEffect(() => { fetchGitStatuses() }, [fetchGitStatuses])
