@@ -126,7 +126,7 @@ export interface ProcessResult {
 
 export interface MessageInfo {
   id: string
-  role: 'user' | 'assistant' | string
+  role: 'user' | 'assistant'
   time?: { created: number }
   [k: string]: unknown
 }

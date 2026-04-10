@@ -32,8 +32,15 @@ export function useConfig(): {
   useEffect(() => {
     const api = window.electronAPI?.config
     if (!api) return
-    api.get().then(setLocalConfig).catch((e) => setConfigError(formatIpcError(e)))
-    return api.onChange(setLocalConfig)
+    let aborted = false
+    api.get()
+      .then((cfg) => { if (!aborted) setLocalConfig(cfg) })
+      .catch((e) => { if (!aborted) setConfigError(formatIpcError(e)) })
+    const unsub = api.onChange(setLocalConfig)
+    return () => {
+      aborted = true
+      unsub()
+    }
   }, [])
 
   /**

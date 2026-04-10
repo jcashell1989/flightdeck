@@ -30,6 +30,18 @@ function AddProjectDrawer({
   onAdded: () => void
 }) {
   const [path, setPath] = useState('')
+
+  // Esc closes the drawer (mirrors the App-level escape handler but scoped to the drawer).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopImmediatePropagation()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onClose])
   const [displayName, setDisplayName] = useState('')
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [validating, setValidating] = useState(false)
@@ -127,7 +139,21 @@ function AddProjectDrawer({
         <span style={{ fontWeight: 600, fontSize: 14 }}>Add Project</span>
         <button
           onClick={onClose}
-          style={{ background: 'none', border: 'none', color: 'var(--fg-subtle)', cursor: 'pointer', fontSize: 16 }}
+          aria-label="Close drawer"
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--fg-subtle)',
+            cursor: 'pointer',
+            fontSize: 16,
+            padding: '4px 8px',
+            minWidth: 32,
+            minHeight: 32,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 4
+          }}
         >
           ×
         </button>

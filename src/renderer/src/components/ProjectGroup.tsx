@@ -48,6 +48,9 @@ export function ProjectGroup({ project, focusedSessionId, onSessionClick, onNewS
     [project.id]
   )
 
+  // activeCount: sessions doing work (running, approval, question).
+  // attentionCount: sessions needing user eyes (approval, question, error, idle).
+  // The two overlap on approval/question — attentionCount badge takes display priority in the header.
   const activeCount = project.sessions.filter((s) => s.state === 'running' || s.state === 'approval' || s.state === 'question').length
   const attentionCount = project.sessions.filter((s) => isAttention(s.state)).length
 

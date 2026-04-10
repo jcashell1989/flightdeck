@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Session, SessionState, isAttention } from '../types'
 import { StatusDot } from './StatusDot'
 import { useElapsedTick } from '../hooks/useElapsedTick'
@@ -67,12 +68,23 @@ function formatRelative(ts: number, now: number): string {
 
 export function SessionCard({ session, focused, onClick }: SessionCardProps) {
   const now = useElapsedTick()
+  const [hovered, setHovered] = useState(false)
   const leftBorder = borderStyle(session.state)
   const tint = tintStyle(session.state)
   const attention = isAttention(session.state)
   // `idle` gets a thinner border than the loud attention states.
   const borderWidth = session.state === 'idle' ? 2 : 3
   const elapsedMs = now - session.startedAt
+
+  // Abort button: only meaningful for running opencode sessions (claude-code is monitor-only).
+  const canAbort = session.state === 'running' && session.agentType === 'opencode'
+
+  const handleAbort = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    window.electronAPI?.opencode?.abortSession(session.id)
+  }
+
+  const borderColor = focused ? 'var(--accent)' : hovered ? 'var(--border-active)' : 'var(--border)'
 
   return (
     <div
@@ -85,18 +97,18 @@ export function SessionCard({ session, focused, onClick }: SessionCardProps) {
           onClick()
         }
       }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       tabIndex={0}
       style={{
         height: 88,
         minWidth: 280,
         padding: '10px 12px',
         borderRadius: 6,
-        border: focused ? '1px solid var(--accent)' : '1px solid var(--border)',
+        border: `1px solid ${borderColor}`,
         borderLeft: leftBorder
           ? `${borderWidth}px solid ${leftBorder}`
-          : focused
-            ? '1px solid var(--accent)'
-            : '1px solid var(--border)',
+          : `1px solid ${borderColor}`,
         backgroundColor: tint ?? 'var(--bg-panel)',
         cursor: 'pointer',
         display: 'flex',
@@ -113,6 +125,25 @@ export function SessionCard({ session, focused, onClick }: SessionCardProps) {
         <div style={{ flex: 1 }} />
         {attention && (
           <span style={{ fontSize: 11, color: leftBorder }}>⚠</span>
+        )}
+        {canAbort && hovered && (
+          <button
+            type="button"
+            onClick={handleAbort}
+            aria-label="Abort session"
+            title="Abort session"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--fg-subtle)',
+              cursor: 'pointer',
+              fontSize: 12,
+              padding: '0 2px',
+              lineHeight: 1
+            }}
+          >
+            ✕
+          </button>
         )}
       </div>
 

@@ -737,7 +737,7 @@ function ProfileRow({
           name="profile-default"
           checked={profile.isDefault}
           onChange={onSetDefault}
-          style={{ cursor: 'pointer' }}
+          style={{ cursor: 'pointer', accentColor: 'var(--accent)' }}
         />
       </td>
       {/* Delete */}

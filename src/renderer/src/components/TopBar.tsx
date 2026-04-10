@@ -24,11 +24,13 @@ export function TopBar({ sessions, connectionStatus = 'disabled', onCmdKClick, o
   // Suppress the "connecting" banner during the initial grace window so the
   // common case (mock-off, hydrate succeeds within a few hundred ms) doesn't
   // flash a banner. Errors and reconnects are shown immediately.
+  // Reset on every connectionStatus transition so reconnects also get the grace period.
   const [graceElapsed, setGraceElapsed] = useState(false)
   useEffect(() => {
+    setGraceElapsed(false)
     const id = setTimeout(() => setGraceElapsed(true), CONNECTING_BANNER_GRACE_MS)
     return () => clearTimeout(id)
-  }, [])
+  }, [connectionStatus])
 
   const showConnectionBanner =
     connectionStatus === 'reconnecting' ||
@@ -46,9 +48,11 @@ export function TopBar({ sessions, connectionStatus = 'disabled', onCmdKClick, o
         borderBottom: '1px solid var(--border)',
         backgroundColor: 'var(--bg-panel)',
         WebkitAppRegion: 'drag',
-        flexShrink: 0
+        flexShrink: 0,
+        position: 'relative'
       }}
     >
+      {/* Left: wordmark + aggregate health dot */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: TITLE_INSET }}>
         <span
           style={{
@@ -63,21 +67,17 @@ export function TopBar({ sessions, connectionStatus = 'disabled', onCmdKClick, o
         </span>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, WebkitAppRegion: 'no-drag' }}>
-        {showConnectionBanner && (
-          <span
-            style={{
-              fontSize: 11,
-              color: connectionStatus === 'error' ? 'var(--status-error)' : 'var(--fg-muted)',
-              fontWeight: 500
-            }}
-          >
-            {connectionStatus === 'connecting' && '… connecting'}
-            {connectionStatus === 'reconnecting' && '… reconnecting'}
-            {connectionStatus === 'error' && '⚠ disconnected'}
-          </span>
-        )}
-        {attentionCount > 0 && (
+      {/* Center: attention badge (spec-ux §1 — absolute-center so it stays centred
+          regardless of left/right content widths) */}
+      {attentionCount > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            WebkitAppRegion: 'no-drag'
+          }}
+        >
           <button
             type="button"
             onClick={onAttentionClick}
@@ -100,6 +100,23 @@ export function TopBar({ sessions, connectionStatus = 'disabled', onCmdKClick, o
           >
             ⚠ {attentionCount}
           </button>
+        </div>
+      )}
+
+      {/* Right: connection status, dispatch, running counter */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, WebkitAppRegion: 'no-drag' }}>
+        {showConnectionBanner && (
+          <span
+            style={{
+              fontSize: 11,
+              color: connectionStatus === 'error' ? 'var(--status-error)' : 'var(--fg-muted)',
+              fontWeight: 500
+            }}
+          >
+            {connectionStatus === 'connecting' && '… connecting'}
+            {connectionStatus === 'reconnecting' && '… reconnecting'}
+            {connectionStatus === 'error' && '⚠ disconnected'}
+          </span>
         )}
 
         <button

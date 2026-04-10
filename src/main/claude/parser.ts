@@ -122,6 +122,7 @@ export async function parseSessionState(
     if (e.type === 'user' && lastUserIdx === -1) lastUserIdx = i
     if (
       e.type === 'system' &&
+      typeof e.subtype === 'string' &&
       (e.subtype === 'stop_hook_summary' || e.subtype === 'turn_duration') &&
       lastSystemStopIdx === -1
     ) {

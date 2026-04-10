@@ -28,6 +28,10 @@ export class OpencodeRegistry extends EventEmitter {
   private clients = new Map<string, OpencodeInstanceClient>()
   private disposed = false
   private claudeMonitor: ClaudeMonitor | null = null
+  // Cache for claudeMonitor.getSnapshot() — invalidated on each 'change' event
+  // so we avoid re-iterating all Claude sessions on every aggregate snapshot call.
+  private _claudeSnapCache: ReturnType<ClaudeMonitor['getSnapshot']> | null = null
+  private _claudeSnapDirty = true
   /**
    * Serialises sync() calls. Rapid back-to-back config changes (e.g. the
    * user mashing "save" in Settings) used to race and leak clients because
@@ -40,7 +44,10 @@ export class OpencodeRegistry extends EventEmitter {
   /** Wire in the Claude Code monitor. Call before start(). */
   setClaudeMonitor(monitor: ClaudeMonitor): void {
     this.claudeMonitor = monitor
-    monitor.on('change', () => this.emit('change'))
+    monitor.on('change', () => {
+      this._claudeSnapDirty = true
+      this.emit('change')
+    })
   }
 
   start(): void {
@@ -127,9 +134,13 @@ export class OpencodeRegistry extends EventEmitter {
     }
 
     // Merge Claude Code sessions into the project list.
+    // Use cached snapshot to avoid re-iterating all sessions on every poll cycle.
     if (this.claudeMonitor) {
-      const claudeSnap = this.claudeMonitor.getSnapshot()
-      for (const claudeProject of claudeSnap.projects) {
+      if (this._claudeSnapDirty || !this._claudeSnapCache) {
+        this._claudeSnapCache = this.claudeMonitor.getSnapshot()
+        this._claudeSnapDirty = false
+      }
+      for (const claudeProject of this._claudeSnapCache.projects) {
         this.mergeClaudeProject(projects, claudeProject)
       }
     }
