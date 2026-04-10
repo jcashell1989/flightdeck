@@ -9,19 +9,21 @@
 ## 1. Structure Map
 
 ```
-agentctl/
+flight-deck/                         # née agentctl (renamed td-a0b401)
 ├── src/
 │   ├── main/                        # Electron main process
-│   │   ├── index.ts                 # App entry, window creation, IPC registration
+│   │   ├── index.ts                 # App entry, window creation, IPC registration, userData migration
 │   │   ├── config/store.ts          # ConfigStore — JSON persistence, atomic write, safeStorage
+│   │   ├── adapters/
+│   │   │   └── file-watch/index.ts  # OpencodeFileWatchMonitor — chokidar on ~/.local/share/opencode/storage
 │   │   ├── ipc/                     # IPC handlers split by domain (added td-b607d3)
 │   │   │   ├── config.ts            # get-theme, config:get/set
-│   │   │   ├── opencode.ts          # opencode:* handlers
+│   │   │   ├── opencode.ts          # opencode:* handlers (incl. session:command, commands:list)
 │   │   │   ├── project.ts           # project:* handlers
 │   │   │   ├── profile.ts           # profile:* handlers
 │   │   │   └── instance.ts          # instance:dispatch
 │   │   ├── opencode/
-│   │   │   ├── client.ts            # OpencodeInstanceClient (SSE, hydrate, reconnect)
+│   │   │   ├── client.ts            # OpencodeInstanceClient (SSE, hydrate, reconnect, postCommand)
 │   │   │   ├── registry.ts          # OpencodeRegistry (N clients, snapshot aggregation)
 │   │   │   ├── launcher.ts          # OpencodeLauncher (spawn opencode serve, port mgmt)
 │   │   │   ├── mapper.ts            # Pure event→state mapper
@@ -31,6 +33,9 @@ agentctl/
 │   │       ├── parser.ts            # JSONL tail parser → state inference
 │   │       └── types.ts             # ClaudeSession, ClaudeProject, ClaudeSnapshot
 │   ├── preload/index.ts             # contextBridge — full typed API surface
+│   ├── shared/
+│   │   ├── commandParser.ts         # parseSlashCommand — pure fn, /cmd args detection + \/ escape
+│   │   └── types.ts                 # CommandDefinition + shared IPC types
 │   └── renderer/src/
 │       ├── main.tsx                 # React entry
 │       ├── App.tsx                  # Root: layout, keyboard nav, state orchestration
@@ -41,23 +46,24 @@ agentctl/
 │       ├── electronAPI.d.ts         # Ambient window.electronAPI types
 │       ├── hooks/
 │       │   ├── useSessionService.ts # IPC subscription + mock branch
-│       │   ├── useConfig.ts         # Config IPC + push subscription
+│       │   ├── useConfig.ts         # Config IPC + push subscription (abort guard)
 │       │   ├── useTheme.ts          # nativeTheme sync
 │       │   ├── useKeyboardNav.ts    # Global keyboard handler
 │       │   ├── useSessionDetail.ts  # Messages fetch + refetch on activity
 │       │   └── useElapsedTick.ts    # 1s ticker for elapsed timers
 │       ├── components/
-│       │   ├── TopBar.tsx           # Health dot, attention badge, dispatch button
+│       │   ├── TopBar.tsx           # Health dot, attention badge (centered), dispatch button
 │       │   ├── NavRail.tsx          # 4-icon nav, 1–4 shortcuts
-│       │   ├── SessionCard.tsx      # 88px card, 6 state variants
+│       │   ├── SessionCard.tsx      # 88px card, 6 state variants, hover border, abort button
 │       │   ├── ProjectGroup.tsx     # Collapsible project section
 │       │   ├── StatusDot.tsx        # Color-coded dot, optional pulse
-│       │   ├── ContextPanel.tsx     # 3-tab panel (Conversation/Diff/Todo)
+│       │   ├── ContextPanel.tsx     # 3-tab panel (Conversation/Diff/Todo) + slash command routing
+│       │   ├── CommandPalette.tsx   # Typeahead dropdown for slash commands (td-739f2a)
 │       │   └── CmdKDispatch.tsx     # ⌘K overlay
 │       └── views/
 │           ├── Dashboard.tsx
 │           ├── Sessions.tsx
-│           ├── Projects.tsx
+│           ├── Projects.tsx         # Filter/sort, git status (30s refresh), default agent, ⚙ menu
 │           └── Settings.tsx
 ├── docs/                            # Specs and design artifacts
 │   ├── structure.md                 # Phase plan (Phases 1–5, decisions, validation)
@@ -65,7 +71,10 @@ agentctl/
 │   ├── spec-theme.md                # cleo-parchment color system
 │   ├── spec-claude-monitor.md       # Claude Code monitor design
 │   ├── spec-fallback-agent.md       # Agent profiles / managed instances design
-│   └── research.md                  # Prior research notes
+│   ├── spec-adapters.md             # Adapter architecture contract (Phase 1, active)
+│   ├── research.md                  # Prior research notes
+│   ├── research-harness-integration.md  # Harness compatibility + Phase 2 licensing research
+│   └── evaluation.md               # Living QA record (this file)
 ├── src/main/**/*.test.ts            # Vitest unit tests (91 tests, added td-c06065)
 ├── vitest.config.ts
 ├── electron.vite.config.ts
@@ -190,37 +199,29 @@ Typecheck: PASS. No CRITICAL issues. Architectural compliance confirmed (IPC bou
 
 | Finding | File | Status |
 |---|---|---|
-| Stale closure in `ContextPanel.handleSend` — `useCallback` dep array missing `session.agentType` and `session.instanceKey`. If session object is replaced while the panel is mounted, slash command routing uses stale agent type, potentially dispatching to a read-only file-watch session. | `src/renderer/src/components/ContextPanel.tsx:227` | Open |
-
-**Fix:** add `session.agentType, session.instanceKey` to the `useCallback` dependency array.
+| Stale closure in `ContextPanel.handleSend` — `useCallback` dep array missing `session.agentType` and `session.instanceKey`. If session object is replaced while the panel is mounted, slash command routing uses stale agent type, potentially dispatching to a read-only file-watch session. | `src/renderer/src/components/ContextPanel.tsx:227` | **In Review** — `55d7c12` |
 
 ### MEDIUM — td-47f570
 
 | Finding | File | Status |
 |---|---|---|
-| Projects gear (⚙) dropdown has no click-outside or blur dismiss handler. Stays open when user clicks elsewhere on the page. | `src/renderer/src/views/Projects.tsx:617` | Open |
-
-**Fix:** `useEffect` with `mousedown` listener on `document`, or a transparent overlay behind the menu.
+| Projects gear (⚙) dropdown has no click-outside or blur dismiss handler. Stays open when user clicks elsewhere on the page. | `src/renderer/src/views/Projects.tsx:617` | **In Review** — `6d83c19` (fixed-inset backdrop div) |
 
 ### MEDIUM — td-9637e6
 
 | Finding | File | Status |
 |---|---|---|
-| Git status in Projects view fetched once on path-list change; never refreshed. Branch/dirty/ahead-behind data goes stale after commits, pushes, or branch switches without navigation. | `src/renderer/src/views/Projects.tsx:432-445` | Open |
-
-**Fix:** refresh on interval (≤60s), window focus event, or registry change event. A manual refresh button is a viable fallback.
+| Git status in Projects view fetched once on path-list change; never refreshed. Branch/dirty/ahead-behind data goes stale after commits, pushes, or branch switches without navigation. | `src/renderer/src/views/Projects.tsx:432-445` | **In Review** — `04e9065` (window focus + 30 s interval) |
 
 ### MEDIUM — td-f794cb
 
 | Finding | File | Status |
 |---|---|---|
-| `postCommand` sends the command name to the opencode server without any client-side validation. A malformed name (e.g. containing newlines or control chars) is sent verbatim. | `src/main/opencode/client.ts:185` | Open |
-
-**Fix:** guard in IPC handler: `if (!/^[a-zA-Z0-9_-]+$/.test(command)) throw new Error('invalid command name')`.
+| `postCommand` sends the command name to the opencode server without any client-side validation. A malformed name (e.g. containing newlines or control chars) is sent verbatim. | `src/main/opencode/client.ts:185` | **In Review** — `7ce26f0` (`/^[a-zA-Z0-9_-]+$/` guard in IPC handler) |
 
 ### LOW — td-3b1b2c
 
 | Finding | File | Status |
 |---|---|---|
-| `mockData.ts` `now()` wrapper is called once at module load — provides no freshness benefit over `const now = Date.now()`. Wrapper adds indirection without achieving stated intent of keeping timestamps current over long sessions. | `src/renderer/src/mockData.ts:57` | Open |
-| `Projects.tsx` `useEffect` dep uses `configProjects.map(p => p.path).join('|')` — pipe in a path causes false collision. Use `JSON.stringify(...)` or a `useMemo`. | `src/renderer/src/views/Projects.tsx:445` | Open |
+| `mockData.ts` `now()` wrapper is called once at module load — no benefit over `const now = Date.now()`. | `src/renderer/src/mockData.ts:57` | **In Review** — `caf52e5` |
+| `Projects.tsx` `useCallback` dep uses `join('|')` — pipe in a path causes false collision. | `src/renderer/src/views/Projects.tsx:445` | **In Review** — `caf52e5` (`JSON.stringify`) |

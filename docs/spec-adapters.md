@@ -1,10 +1,10 @@
 # flight deck — Adapter Architecture
 
-> Status: Draft. Awaiting approval.
+> Status: Active. Approved (td-604527 closed 2026-04-10).
 > Ticket: td-604527
 > Last updated: 2026-04-10
-> Prerequisite for: td-838cbc (OpencodeMonitor), td-3d1f6c (slash commands),
-> td-a0b401 (rename), td-787370 (Phase 2 Claude Code)
+> Prerequisites shipped: td-838cbc (OpencodeMonitor ✓), td-3d1f6c (slash commands ✓),
+> td-a0b401 (rename ✓). Remaining: td-787370 (Phase 2 Claude Code)
 
 ---
 
