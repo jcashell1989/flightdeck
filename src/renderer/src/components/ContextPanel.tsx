@@ -224,7 +224,7 @@ function ConversationTab({
     } finally {
       setSending(false)
     }
-  }, [replyDraft, sending, session.id])
+  }, [replyDraft, sending, session.id, session.agentType, session.instanceKey])
 
   const showBanner =
     session.state === 'approval' ||
