@@ -182,6 +182,29 @@ export class OpencodeInstanceClient extends EventEmitter {
     }
   }
 
+  /** POST /session/:id/command — server-side slash command execution (td-3d1f6c) */
+  async postCommand(sessionId: string, command: string, args: string): Promise<{ ok: boolean }> {
+    const dir = this.getDirectory(sessionId)
+    const url = new URL(`/session/${encodeURIComponent(sessionId)}/command`, this.baseUrl)
+    if (dir) url.searchParams.set('directory', dir)
+    const res = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command, arguments: args })
+    })
+    if (!res.ok) throw new Error(`opencode command failed: ${res.status}`)
+    return { ok: true }
+  }
+
+  /** GET /command — discover available slash commands for typeahead (td-3d1f6c) */
+  async listCommands(): Promise<Array<{ name: string; description: string; source: string; template?: string }>> {
+    const url = new URL('/command', this.baseUrl)
+    const res = await fetch(url.toString())
+    if (!res.ok) throw new Error(`opencode listCommands failed: ${res.status}`)
+    const data = await res.json() as unknown
+    return Array.isArray(data) ? (data as Array<{ name: string; description: string; source: string; template?: string }>) : []
+  }
+
   async createSession(directory: string, title?: string): Promise<string> {
     const res = await this.sdk.session.create({
       query: { directory },

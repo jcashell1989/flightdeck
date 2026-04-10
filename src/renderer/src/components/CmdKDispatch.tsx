@@ -1,5 +1,6 @@
 import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AgentProfile, AppConfig, Project } from '../types'
+import { parseSlashCommand } from '../../../shared/commandParser'
 
 interface CmdKDispatchProps {
   open: boolean
@@ -152,7 +153,13 @@ export function CmdKDispatch({
         const api = window.electronAPI?.opencode
         if (!api) throw new Error('bridge unavailable')
         setBusyLabel('sending…')
-        await api.sendPrompt(sessionMode, text)
+        // Slash command routing for append-to-existing-session path.
+        const parsed = parseSlashCommand(text)
+        if (parsed) {
+          await api.sendCommand(sessionMode, parsed.command, parsed.args)
+        } else {
+          await api.sendPrompt(sessionMode, text.startsWith('\\/') ? text.slice(1) : text)
+        }
         onDispatched(sessionMode)
       } else if (selectedProfileId) {
         // Managed dispatch: launcher starts opencode serve if needed.

@@ -72,6 +72,18 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
     }
   )
 
+  safeHandle('opencode:session:command', async (_e, sessionId: string, command: string, args: string) => {
+    const client = opencodeRegistry.findClientForSession(sessionId)
+    if (!client) throw new Error(`no client owns session ${sessionId}`)
+    return client.postCommand(sessionId, command, args)
+  })
+
+  safeHandle('opencode:commands:list', async (_e, sessionId: string) => {
+    const client = opencodeRegistry.findClientForSession(sessionId)
+    if (!client) return []
+    return client.listCommands()
+  })
+
   safeHandle('opencode:session:abort', async (_e, sessionId: string) => {
     const client = opencodeRegistry.findClientForSession(sessionId)
     if (!client) throw new Error(`no client owns session ${sessionId}`)

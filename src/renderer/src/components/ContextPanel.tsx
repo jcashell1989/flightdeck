@@ -3,6 +3,7 @@ import { AppConfig, Project, Session } from '../types'
 import { StatusDot } from './StatusDot'
 import type { MessageRecord, ProcessResult } from '../electronAPI'
 import { useSessionDetail } from '../hooks/useSessionDetail'
+import { parseSlashCommand } from '../../../shared/commandParser'
 
 interface ContextPanelProps {
   session: Session | null
@@ -205,7 +206,18 @@ function ConversationTab({
     setSending(true)
     setSendError(null)
     try {
-      await api.sendPrompt(session.id, text)
+      // Slash command routing: /cmd args → sendCommand; plain text → sendPrompt.
+      // Only for managed opencode sessions (claude-code and file-watch are read-only).
+      const canDispatchCommands =
+        session.agentType === 'opencode' &&
+        !session.instanceKey?.startsWith('opencode-file-watch:')
+      const parsed = canDispatchCommands ? parseSlashCommand(text) : null
+      if (parsed) {
+        await api.sendCommand(session.id, parsed.command, parsed.args)
+      } else {
+        // Strip the \/ escape before sending (user typed \/foo to mean literal /foo).
+        await api.sendPrompt(session.id, text.startsWith('\\/') ? text.slice(1) : text)
+      }
       setReplyDraft('')
     } catch (err) {
       setSendError(err instanceof Error ? err.message : String(err))

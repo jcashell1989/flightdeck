@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 import type {
   AgentProfile,
   AppConfig,
+  CommandDefinition,
   MessageRecord,
   OpencodeSnapshotPayload,
   ProcessResult,
@@ -43,6 +44,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('opencode:session:respond', sessionId, permissionId, response),
     abortSession: (sessionId: string): Promise<{ ok: boolean }> =>
       ipcRenderer.invoke('opencode:session:abort', sessionId),
+    sendCommand: (sessionId: string, command: string, args: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('opencode:session:command', sessionId, command, args),
+    listCommands: (sessionId: string): Promise<CommandDefinition[]> =>
+      ipcRenderer.invoke('opencode:commands:list', sessionId),
     createSession: (args: {
       instanceKey?: string
       directory: string

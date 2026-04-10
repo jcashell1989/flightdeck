@@ -12,6 +12,7 @@ export type {
   AgentProfile,
   AggregateStatus,
   AppConfig,
+  CommandDefinition,
   ConnectionStatus,
   MessageRecord,
   OpencodeInstance,

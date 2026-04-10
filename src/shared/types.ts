@@ -151,3 +151,10 @@ export interface ProjectValidationResult {
   reason?: string
   isGitRepo?: boolean
 }
+
+export interface CommandDefinition {
+  name: string
+  description: string
+  source: string
+  template?: string
+}
