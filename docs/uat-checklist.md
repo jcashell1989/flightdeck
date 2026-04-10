@@ -1,4 +1,4 @@
-# agentctl — UAT Checklist
+# flight deck — UAT Checklist
 
 > **Status:** First full UAT pass. Nothing here has been tested end-to-end before.
 > **Ticket:** td-65e2f8
@@ -24,7 +24,7 @@ Mark each item: ✅ pass · ❌ fail (file bug id) · ⏭ skip (why) · 🟡 par
 - [ ] Find the "mock data" toggle (or the opencode instances section)
 - [ ] Set `config.mock.enabled = false`
   - Alternative: quit app, edit `$userData/config.json` directly, set `"mock": { "enabled": false }`, relaunch
-  - `$userData` on macOS: `~/Library/Application Support/agentctl/config.json`
+  - `$userData` on macOS: `~/Library/Application Support/flight-deck/config.json`
 - [ ] Verify mock flag is persisted across restart
 - [ ] Dashboard no longer shows mock sessions after reload
 
@@ -341,8 +341,8 @@ Verify each shortcut in its intended context AND verify it does NOT fire while t
 - [ ] Restart app → no zombie instances re-attached
 
 ### 10.4 Connection robustness
-- [ ] Manually kill `opencode serve` while app running → agentctl reflects disconnected state
-- [ ] Restart the instance manually → agentctl reconnects or user can re-dispatch
+- [ ] Manually kill `opencode serve` while app running → flight deck reflects disconnected state
+- [ ] Restart the instance manually → flight deck reconnects or user can re-dispatch
 
 ### 10.5 Error cases
 - [ ] Invalid API key → error surfaces in session (not silent)

@@ -1,4 +1,4 @@
-# agentctl — Theme Specification: cleo-parchment
+# flight deck — Theme Specification: cleo-parchment
 
 > The dashboard uses the cleo-parchment theme in both dark and light variants.
 > Dark/light follows macOS appearance automatically via `prefers-color-scheme`

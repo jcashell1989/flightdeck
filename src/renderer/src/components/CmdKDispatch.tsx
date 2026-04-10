@@ -20,7 +20,7 @@ interface HistoryEntry {
   ts: number
 }
 
-const HISTORY_KEY = 'agentctl.dispatchHistory'
+const HISTORY_KEY = 'flight-deck.dispatchHistory'
 const HISTORY_MAX = 20
 
 function loadHistory(): HistoryEntry[] {

@@ -1,4 +1,4 @@
-# agentctl — Agent Profiles & Managed Instance Design
+# flight deck — Agent Profiles & Managed Instance Design
 
 > Status: Implemented.
 > Ticket: td-be1f9c
@@ -8,10 +8,10 @@
 
 ## Overview
 
-agentctl can launch and manage `opencode serve` processes on behalf of
+flight deck can launch and manage `opencode serve` processes on behalf of
 configured **Agent Profiles**. A profile is a reusable env template
 (agent type, provider, model, API key). When the user dispatches a task
-via `⌘K`, agentctl starts the appropriate `opencode serve` process if it
+via `⌘K`, flight deck starts the appropriate `opencode serve` process if it
 isn't already running, connects a client to it, and sends the prompt.
 
 This enables running multiple opencode instances with different models
@@ -43,7 +43,7 @@ are informational only (Claude Code is passive-monitor-only due to auth constrai
 
 ### ManagedInstance (runtime state, not persisted)
 
-A running `opencode serve` process spawned by agentctl:
+A running `opencode serve` process spawned by flight deck:
 
 ```
 profileId + directory → { process: ChildProcess, port: number }
@@ -168,7 +168,7 @@ OS keychain as the backing store.
 
 ## Launch Template
 
-agentctl runs these commands internally. Shown here for transparency and
+flight deck runs these commands internally. Shown here for transparency and
 for users who want to run instances manually:
 
 ```sh
@@ -180,7 +180,7 @@ OPENCODE_MODEL=openrouter/anthropic/claude-sonnet-4-5 \
 # Fallback — kimi-k2.5 via OpenRouter
 OPENROUTER_API_KEY=sk-or-... \
 OPENCODE_MODEL=openrouter/kimi-k2.5 \
-  opencode serve --port 4100   # agentctl auto-assigns from 4100–4200
+  opencode serve --port 4100   # flight deck auto-assigns from 4100–4200
 
 # Alternative fallback — minimax m2.7 via OpenRouter
 OPENROUTER_API_KEY=sk-or-... \

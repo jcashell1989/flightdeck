@@ -1,7 +1,7 @@
-# agentctl — Research & Evaluation
+# flight deck — Research & Evaluation
 
 > Captured: 2026-04-06
-> Context: Evaluating existing tools and integration surfaces before designing agentctl.
+> Context: Evaluating existing tools and integration surfaces before designing flight deck.
 
 ---
 

@@ -1,5 +1,5 @@
 {
-  "name": "agentctl",
+  "name": "flight-deck",
   "version": "0.1.0",
   "description": "Multi-agent coding dashboard",
   "main": "./out/main/index.mjs",

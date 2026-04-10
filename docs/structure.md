@@ -1,4 +1,4 @@
-# agentctl — Structure & Build Phases
+# flight deck — Structure & Build Phases
 
 > Status: Approved.
 > Last updated: 2026-04-06
@@ -159,7 +159,7 @@ No E2E framework until interaction surface stabilizes.
 
 **Ticket:** `td-be1f9c`
 
-**Goal:** agentctl launches and manages `opencode serve` processes on behalf of
+**Goal:** flight deck launches and manages `opencode serve` processes on behalf of
 configured Agent Profiles. Users can run multiple opencode instances with
 different models (e.g. Claude Sonnet as primary, kimi-k2.5 as fallback) and
 select between them in the `⌘K` dispatch overlay.

@@ -1,6 +1,8 @@
 import { app, BrowserWindow, nativeTheme, webContents } from 'electron'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { is } from '@electron-toolkit/utils'
 import { configStore } from './config/store'
 import { opencodeRegistry } from './opencode/registry'
@@ -72,6 +74,43 @@ function createWindow(): void {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
+
+/**
+ * One-time migration: copy userData from the old "agentctl" app name to the
+ * new "flight-deck" app name. Runs before any code reads app.getPath('userData')
+ * so the rest of the app never sees the old path.
+ * Migration failure must not crash the app — wrapped in try/catch.
+ */
+function migrateUserData(): void {
+  try {
+    const platform = process.platform
+    const home = app.getPath('home')
+    let oldPath: string
+    if (platform === 'darwin') {
+      oldPath = path.join(home, 'Library', 'Application Support', 'agentctl')
+    } else if (platform === 'linux') {
+      oldPath = path.join(home, '.config', 'agentctl')
+    } else {
+      // win32
+      const appData = process.env['APPDATA'] ?? path.join(home, 'AppData', 'Roaming')
+      oldPath = path.join(appData, 'agentctl')
+    }
+    const newPath = app.getPath('userData')
+    const oldExists = fs.existsSync(oldPath)
+    const newExists = fs.existsSync(newPath)
+    if (oldExists && !newExists) {
+      fs.cpSync(oldPath, newPath, { recursive: true })
+      fs.rmSync(oldPath, { recursive: true, force: true })
+      console.log(`[main] migrated userData: ${oldPath} → ${newPath}`)
+    } else if (oldExists && newExists) {
+      console.warn(`[main] userData migration skipped: both old (${oldPath}) and new (${newPath}) paths exist. Remove the old path manually if desired.`)
+    }
+  } catch (e) {
+    console.error('[main] userData migration failed (non-fatal):', e)
+  }
+}
+
+migrateUserData()
 
 app.whenReady().then(async () => {
   // Config must be loaded before any IPC handler can read it.

@@ -1,4 +1,4 @@
-# agentctl Codebase Evaluation
+# flight deck Codebase Evaluation
 
 **Date:** 2026-04-08  
 **Session:** ses_0ab6d4  
@@ -158,3 +158,69 @@ All findings were acted on in the same session. Four tickets created and submitt
 - **td-92bedd** — Correctness fixes (commit `d43915d`)
 - **td-c06065** — Test infrastructure + 91 unit tests (commit `9f4463a`)
 - **td-b607d3** — UX spec gaps + IPC split (commits `84792e9`, `1f4a1da`)
+
+---
+
+# UAT Follow-up Batch Review
+
+**Date:** 2026-04-10
+**Session:** ses_a75d62 (reviewer)
+**Implementer session:** ses_629813
+**Commits reviewed:** `cade0a9..0a76709` (+783/-111, 21 files, 4 commits)
+
+Tickets reviewed and approved:
+
+| Ticket | Title | Verdict |
+|---|---|---|
+| td-838cbc | OpencodeMonitor — file-watch ~/.local/share/opencode/storage | APPROVED |
+| td-3d1f6c | Slash command wiring — POST /session/:id/command + GET /command | APPROVED |
+| td-121104 | SessionCard abort [✕] button missing on hover | APPROVED |
+| td-68394f | Projects view incomplete vs spec-ux §5 | APPROVED |
+| td-0924b7 | Add Project drawer close [x] hit target too small | APPROVED |
+| td-c0c93f | LOW/NIT cleanup from UAT bug hunt | APPROVED |
+| td-7f5891 | TopBar deviates from spec-ux §1 | APPROVED |
+| td-a045b1 | SessionCard hover border not applied | APPROVED |
+| td-ce4e56 | Settings default-profile radio not themed | APPROVED |
+
+Typecheck: PASS. No CRITICAL issues. Architectural compliance confirmed (IPC boundary clean, mock toggle preserved, no new packages).
+
+## Review Findings — Open
+
+### HIGH — td-b7c63f
+
+| Finding | File | Status |
+|---|---|---|
+| Stale closure in `ContextPanel.handleSend` — `useCallback` dep array missing `session.agentType` and `session.instanceKey`. If session object is replaced while the panel is mounted, slash command routing uses stale agent type, potentially dispatching to a read-only file-watch session. | `src/renderer/src/components/ContextPanel.tsx:227` | Open |
+
+**Fix:** add `session.agentType, session.instanceKey` to the `useCallback` dependency array.
+
+### MEDIUM — td-47f570
+
+| Finding | File | Status |
+|---|---|---|
+| Projects gear (⚙) dropdown has no click-outside or blur dismiss handler. Stays open when user clicks elsewhere on the page. | `src/renderer/src/views/Projects.tsx:617` | Open |
+
+**Fix:** `useEffect` with `mousedown` listener on `document`, or a transparent overlay behind the menu.
+
+### MEDIUM — td-9637e6
+
+| Finding | File | Status |
+|---|---|---|
+| Git status in Projects view fetched once on path-list change; never refreshed. Branch/dirty/ahead-behind data goes stale after commits, pushes, or branch switches without navigation. | `src/renderer/src/views/Projects.tsx:432-445` | Open |
+
+**Fix:** refresh on interval (≤60s), window focus event, or registry change event. A manual refresh button is a viable fallback.
+
+### MEDIUM — td-f794cb
+
+| Finding | File | Status |
+|---|---|---|
+| `postCommand` sends the command name to the opencode server without any client-side validation. A malformed name (e.g. containing newlines or control chars) is sent verbatim. | `src/main/opencode/client.ts:185` | Open |
+
+**Fix:** guard in IPC handler: `if (!/^[a-zA-Z0-9_-]+$/.test(command)) throw new Error('invalid command name')`.
+
+### LOW — td-3b1b2c
+
+| Finding | File | Status |
+|---|---|---|
+| `mockData.ts` `now()` wrapper is called once at module load — provides no freshness benefit over `const now = Date.now()`. Wrapper adds indirection without achieving stated intent of keeping timestamps current over long sessions. | `src/renderer/src/mockData.ts:57` | Open |
+| `Projects.tsx` `useEffect` dep uses `configProjects.map(p => p.path).join('|')` — pipe in a path causes false collision. Use `JSON.stringify(...)` or a `useMemo`. | `src/renderer/src/views/Projects.tsx:445` | Open |

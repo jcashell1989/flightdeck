@@ -1,4 +1,4 @@
-# agentctl
+# flight deck
 
 A multi-agent coding dashboard for monitoring and dispatching work across
 multiple AI coding agents and project directories.
