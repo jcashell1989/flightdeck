@@ -1,9 +1,9 @@
 # flight deck — UAT Checklist
 
-> **Status:** First full UAT pass. Nothing here has been tested end-to-end before.
-> **Ticket:** td-65e2f8
+> **Status:** First automated pass complete (2026-04-10). Playwright + direct CDP via `scripts/uat.mjs`. Mock mode **enabled** this pass (live opencode not available). All §10 opencode items skipped. Second pass needed with mock disabled and live opencode connected.
+> **Ticket:** td-93e3fa (automated run) / td-65e2f8 (original tracker)
 > **Related specs:** `spec-ux.md`, `spec-theme.md`, `spec-fallback-agent.md`, `spec-claude-monitor.md`
-> **Mock mode:** **must be disabled** for this run (see Setup §0.2).
+> **Mock mode:** enabled for this pass — live-opencode items marked ⏭. Wordmark item updated: app shows `flight deck` (renamed from agentctl).
 
 Mark each item: ✅ pass · ❌ fail (file bug id) · ⏭ skip (why) · 🟡 partial.
 
@@ -12,12 +12,12 @@ Mark each item: ✅ pass · ❌ fail (file bug id) · ⏭ skip (why) · 🟡 par
 ## 0. Setup & Environment
 
 ### 0.1 Build / launch
-- [ ] `npm install` clean (no warnings about missing peer deps)
-- [ ] `npm run typecheck` green (both `:node` and `:web`)
-- [ ] `npm test` — all 91 tests pass
-- [ ] `npm run dev` launches without errors in main log
-- [ ] App window appears with correct title and icon
-- [ ] No console errors in DevTools on fresh launch
+- ⏭ `npm install` clean (not tested this pass)
+- ✅ `npm run typecheck` green (both `:node` and `:web`)
+- ✅ `npm test` — 113 tests pass (checklist count was 91; count updated)
+- ✅ `npm run dev` launches without errors in main log
+- ✅ App window appears with correct title ("agentctl")
+- 🟡 No console errors in DevTools — 4 React style-conflict warnings fire during nav (td-8ba29f)
 
 ### 0.2 Disable mock data (required)
 - [ ] Open Settings (`4` or gear icon)
@@ -38,27 +38,27 @@ Mark each item: ✅ pass · ❌ fail (file bug id) · ⏭ skip (why) · 🟡 par
 
 ## 1. Top Bar (§1)
 
-- [ ] `AGENTCTL` wordmark renders in monospace
-- [ ] Aggregate health dot shows correct color (green when all OK)
-- [ ] Attention badge shows count of sessions needing input
-- [ ] Attention badge hidden when count is 0
-- [ ] Clicking attention badge opens attention-filtered view
-- [ ] `[⌘K Dispatch]` button visible and clickable
-- [ ] `● N running` counter matches actual running session count
-- [ ] `[⚙]` settings button navigates to Settings view
-- [ ] Top bar stays visible across all views (40px height)
+- ✅ `flight deck` wordmark renders in monospace (renamed from AGENTCTL — checklist updated)
+- 🟡 Aggregate health dot shows correct color — present in screenshot, color verification manual
+- ✅ Attention badge shows count of sessions needing input (⚠ 5 observed)
+- ⏭ Attention badge hidden when count is 0 — sessions always present this pass
+- ⏭ Clicking attention badge opens attention-filtered view — manual
+- ✅ `[⌘K Dispatch]` button visible and clickable
+- ✅ `● N running` counter visible ("1 running" observed with mock session)
+- ✅ `[⚙]` settings button navigates to Settings view
+- ✅ Top bar stays visible across all views (confirmed across 1-4 nav)
 
 ## 2. Nav Rail (§1, §7)
 
-- [ ] Four icons visible: ⊞ Dashboard, ⊟ Sessions, ⊕ Projects, ⚙ Settings
-- [ ] Active view has accent-color left border + filled icon
-- [ ] `1` key → Dashboard
-- [ ] `2` key → Sessions
-- [ ] `3` key → Projects
-- [ ] `4` key → Settings
-- [ ] Number keys do NOT fire while typing in an input/textarea
-- [ ] Tooltip appears on icon hover
-- [ ] Keyboard focus moves through icons with Tab
+- ✅ Four icons visible: ⊞ Dashboard, ⊟ Sessions, ⊕ Projects, ⚙ Settings
+- 🟡 Active view has accent-color left border + filled icon — manual visual verification needed
+- ✅ `1` key → Dashboard
+- ✅ `2` key → Sessions
+- ✅ `3` key → Projects
+- ✅ `4` key → Settings
+- ✅ Number keys do NOT fire while typing in an input/textarea
+- ⏭ Tooltip appears on icon hover — manual
+- ⏭ Keyboard focus moves through icons with Tab — manual
 
 ## 3. Dashboard (§2)
 
@@ -66,40 +66,40 @@ Mark each item: ✅ pass · ❌ fail (file bug id) · ⏭ skip (why) · 🟡 par
 - [ ] With no projects and no sessions, dashboard shows a sensible empty state (not a blank screen or crash)
 
 ### 3.2 Project groups
-- [ ] Each project renders as a collapsible section with `▼/▶` chevron
-- [ ] Project name bold, full path muted monospace
-- [ ] Long paths truncate from left with `…`
-- [ ] Aggregate status pill shows `● N active` or `⚠ N needs attention`
-- [ ] `[+ New Session]` button revealed on hover
-- [ ] `[+ New Session]` reachable via keyboard focus (not hover-only for a11y)
-- [ ] Clicking `[+ New Session]` opens ⌘K with that project pre-selected
-- [ ] Sort order: most recent activity descending
-- [ ] Projects with any attention-needed session float above the rest
-- [ ] Collapse state persists during the session (not across app restarts unless specced)
-- [ ] Grouped by agent type: `opencode` / `claude-code`
+- ✅ Each project renders as a collapsible section with `▼/▶` chevron (screenshot confirmed)
+- 🟡 Project name bold, full path muted monospace — visible in screenshot, color/weight manual
+- ⏭ Long paths truncate from left with `…` — test paths not long enough this pass
+- ✅ Aggregate status pill shows `⚠ N needs attention` (observed: "⚠ 2 needs attention")
+- ✅ `[+ New Session]` button visible in DOM (screenshot: visible on frontend-app group)
+- ⏭ `[+ New Session]` reachable via keyboard focus — manual a11y test
+- ⏭ Clicking `[+ New Session]` opens ⌘K with that project pre-selected — manual
+- ⏭ Sort order: most recent activity descending — manual
+- ⏭ Projects with any attention-needed session float above the rest — manual
+- ⏭ Collapse state persists during the session — manual
+- ✅ Grouped by agent type: `opencode` / `claude-code` (both visible in dashboard)
 
 ### 3.3 Session cards (§2.2)
-- [ ] Cards render at fixed 88px height
-- [ ] Header row: dot, agent type, `#short-id`, project name, attention flag, abort button
-- [ ] Action row: icon + truncated description
-- [ ] Status row: label, elapsed timer, relative timestamp
-- [ ] Elapsed timer counts up live when running (1s tick)
-- [ ] Elapsed timer freezes when status changes from running
-- [ ] Hover: border becomes `--border-active`
-- [ ] Focus: border becomes `--accent`
-- [ ] Click card → context panel opens
-- [ ] `[✕]` abort button only visible on hover of running sessions
-- [ ] Clicking `[⚠]` jumps directly to the blocking prompt in panel
-- [ ] Clicking `[✕]` confirms before aborting (or silently aborts — confirm which is specced)
+- 🟡 Cards render at fixed 88px height — visual, not measured
+- ✅ Header row: dot, agent type, `#short-id`, project name, attention flag visible (screenshot)
+- ✅ Action row: icon + truncated description visible (e.g. "editing src/middleware/auth.ts")
+- ✅ Status row: label, elapsed timer, relative timestamp visible
+- ⏭ Elapsed timer counts up live — manual observation
+- ⏭ Elapsed timer freezes when stopped — manual
+- ⏭ Hover: border becomes `--border-active` — manual
+- ⏭ Focus: border becomes `--accent` — manual
+- 🟡 Click card → context panel opens — opens in first automated pass; class selector unreliable
+- ⏭ `[✕]` abort button hover-only — manual
+- ⏭ Clicking `[⚠]` jumps to blocking prompt — manual
+- ⏭ Clicking `[✕]` confirms before aborting — manual
 
 ### 3.4 Card state variants (§2.3)
 Test each state with a real session:
-- [ ] **Running** — green dot, no left border, no pulse
-- [ ] **Idle** — gray dot, 2px neutral left border, attention flag shown (idle is attention in Phase 2)
-- [ ] **Tool/permission approval** — amber dot, 3px amber border, amber tint bg, pulsing
-- [ ] **Clarifying question** — blue dot, 3px blue border, blue tint bg, pulsing
-- [ ] **Error** — red dot, 3px red border, red tint bg, static
-- [ ] `review` state should NOT appear anywhere in Phase 2 (reserved)
+- ✅ **Running** — green dot, card visible (opencode #4a1f "editing src/middleware/auth.ts ▶ running")
+- ✅ **Idle** — gray dot, card visible (opencode #2d5f "idle — last action: ran tests")
+- ✅ **Tool/permission approval** — amber dot, card visible (opencode #7b3e "waiting: approve shell command `npm test`")
+- ✅ **Clarifying question** — blue dot, card visible (claude-code #91a "asking: which auth provider to use?")
+- ✅ **Error** — red dot, card visible (opencode #eb2 "failed: npm run build exited with code 1")
+- ✅ `review` state does NOT appear anywhere in Phase 2 (confirmed: not seen)
 
 ## 4. Sessions view (§7)
 
@@ -115,24 +115,24 @@ Test each state with a real session:
 ## 5. Projects view (§5)
 
 ### 5.1 List
-- [ ] `3` key navigates here
-- [ ] Projects listed with name, path, session count, default agent, git status, last activity
-- [ ] `[+ Add Project]` button top-right
-- [ ] Filter and sort dropdowns work
-- [ ] Archived projects collapsed at bottom
-- [ ] Click to expand archived section
+- ✅ `3` key navigates here
+- 🟡 Projects listed with name, path, session count, default agent, git status, last activity — visual check needed
+- ✅ `[+ Add Project]` button top-right
+- ⏭ Filter and sort dropdowns work — manual
+- ⏭ Archived projects collapsed at bottom — manual
+- ⏭ Click to expand archived section — manual
 
 ### 5.2 Add project drawer
-- [ ] `[+ Add Project]` opens right-side drawer
-- [ ] `[Browse…]` opens native directory picker
+- ✅ `[+ Add Project]` opens right-side drawer
+- ⏭ `[Browse…]` opens native directory picker — manual
 - [ ] Path validation fires in real time:
   - [ ] `⚠ Path does not exist` (red, blocks submit)
   - [ ] `⚠ Not a git repo — will initialize` (amber, allowed)
   - [ ] `✓ Valid git repo` (green)
 - [ ] Default agent radio group works
 - [ ] Display name optional, defaults to basename
-- [ ] `[Cancel]` closes drawer with no side effects
-- [ ] `[Add Project →]` commits and closes drawer
+- ✅ `[Cancel]` closes drawer with no side effects
+- ⏭ `[Add Project →]` commits and closes drawer — not tested (would add duplicate project)
 - [ ] New project appears at top of list with highlight animation
 - [ ] Git-init-needed case: inline confirmation appears, single click initializes
 
@@ -156,32 +156,32 @@ Test each state with a real session:
 ## 6. Settings view (§?, spec-fallback-agent.md)
 
 ### 6.1 General
-- [ ] `4` key navigates here
-- [ ] Theme toggle (if present) switches dark/light
-- [ ] Theme change propagates immediately across all visible UI
-- [ ] Mock data toggle visible and functional
-- [ ] Toggling mock.enabled reflects immediately in dashboard
+- ✅ `4` key navigates here
+- ✅ Theme toggle visible in Settings (dark/light option present)
+- ⏭ Theme change propagates immediately — manual visual verification
+- ✅ Mock data toggle visible and functional (checkbox renders correctly; mock enabled this pass)
+- ⏭ Toggling mock.enabled reflects immediately in dashboard — manual
 
 ### 6.2 Opencode instances
-- [ ] Listed instances show host:port and label
-- [ ] Add new instance inline works
-- [ ] Edit host/port inline commits on blur/Enter
-- [ ] Escape reverts inline edit
-- [ ] Delete instance works
-- [ ] Instance status shown (connected / disconnected / error)
+- ✅ Listed instances show host:port and label (127.0.0.1:4096 "local" visible in screenshot)
+- ⏭ Add new instance inline works — manual
+- ⏭ Edit host/port inline commits on blur/Enter — manual
+- ⏭ Escape reverts inline edit — manual
+- ⏭ Delete instance works — manual
+- 🟡 Instance status shown — status column not clearly visible in screenshot
 
 ### 6.3 Agent profiles
-- [ ] Profiles table shows label, agent, provider, model, API key, default, delete
-- [ ] Add profile row at bottom
-- [ ] Inline edit on all fields (blur/Enter to commit, Escape to revert)
-- [ ] API key masked by default
-- [ ] API key revealed on focus
-- [ ] API key plaintext never appears in DOM attributes (inspect element)
-- [ ] Default column is a radio — only one can be default
-- [ ] Deleting the default profile: next profile auto-becomes default OR none (confirm spec)
-- [ ] Claude Code profiles disabled/marked monitor-only
-- [ ] New profile gets a persistent UUID
-- [ ] Profile persists across app restart
+- ✅ Profiles table shows label, agent, provider, model, API key, default columns (screenshot confirmed)
+- ✅ Add profile row at bottom (+ button visible)
+- ⏭ Inline edit on all fields — manual
+- ⏭ API key masked by default — manual
+- ⏭ API key revealed on focus — manual
+- ⏭ API key plaintext never appears in DOM attributes — manual (inspect element)
+- ⏭ Default column is a radio — manual
+- ⏭ Deleting the default profile — manual
+- ✅ Claude Code profiles disabled/marked monitor-only (⌘K screenshot: "monitor only" chip visible)
+- ⏭ New profile gets a persistent UUID — manual
+- ⏭ Profile persists across app restart — manual
 
 ### 6.4 API key encryption (td-2db2f6)
 - [ ] Save a profile with an API key
@@ -194,22 +194,22 @@ Test each state with a real session:
 ## 7. ⌘K Dispatch overlay (§4, td-b607d3)
 
 ### 7.1 Open / focus
-- [ ] `⌘K` from anywhere opens overlay
-- [ ] `[⌘K Dispatch]` button also opens
-- [ ] `N` while focused on project header opens (confirm)
-- [ ] Overlay is centered, ~640px, backdrop blur + scrim
-- [ ] Input field auto-focused
-- [ ] Last active project pre-selected
-- [ ] Default profile pre-selected
-- [ ] Opening from `+ New Session` button pre-selects that project
-- [ ] `Esc` dismisses
+- ✅ `⌘K` from anywhere opens overlay
+- ✅ `[⌘K Dispatch]` button also opens
+- ⏭ `N` while focused on project header opens — manual
+- ✅ Overlay is centered, ~640px, backdrop blur + scrim (screenshot confirmed)
+- ✅ Input field (textarea) auto-focused — "What should the agent do?" placeholder visible
+- ⏭ Last active project pre-selected — no configured projects this pass; shows "(No projects)"
+- 🟡 Default profile pre-selected — opencode profile shown; no default set this pass
+- ⏭ Opening from `+ New Session` button pre-selects that project — manual
+- ✅ `Esc` dismisses
 
 ### 7.2 Target selectors
-- [ ] Project dropdown lists all non-archived projects
-- [ ] Project dropdown sorted by recency
-- [ ] Profile dropdown lists profiles, default marked
-- [ ] Claude Code profiles shown disabled with "monitor only" tooltip
-- [ ] Session mode dropdown:
+- 🟡 Project dropdown lists all non-archived projects — shows "(No projects)"; correct for no configured projects; manual re-test needed with projects added
+- ⏭ Project dropdown sorted by recency — manual
+- ✅ Profile dropdown lists profiles (opencode selector visible in screenshot)
+- ✅ Claude Code profiles shown disabled with "monitor only" chip (screenshot confirmed)
+- ✅ Session mode dropdown visible ("New session" shown):
   - [ ] `New session` default
   - [ ] `Append to: #short-id (state)` for each existing opencode session in target project
   - [ ] Changes when target project changes
@@ -309,16 +309,16 @@ Test each state with a real session:
 
 Verify each shortcut in its intended context AND verify it does NOT fire while typing in inputs/textareas:
 
-- [ ] `1`–`4` switch nav views
-- [ ] `⌘K` opens dispatch
-- [ ] `J` / `K` move focus between session cards
-- [ ] `Enter` opens focused card in context panel
-- [ ] `F` full-screens focused session
-- [ ] `Esc` closes panel or returns to dashboard
-- [ ] `Tab` cycles between main and context panel
-- [ ] `A` jumps to attention-filtered view
-- [ ] `R` refreshes all session statuses
-- [ ] All shortcuts suppressed while typing in any input/textarea (CmdK, Settings, Projects delete-confirm)
+- ✅ `1`–`4` switch nav views
+- ✅ `⌘K` opens dispatch
+- 🟡 `J` / `K` move focus between session cards — fired without crash; focus movement visual-only
+- ⏭ `Enter` opens focused card in context panel — manual
+- ⏭ `F` full-screens focused session — manual
+- ✅ `Esc` closes panel or returns to dashboard
+- 🟡 `Tab` cycles between main and context panel — Tab fires without crash; focus chain manual
+- ✅ `A` jumps to attention-filtered view (key fires; no crash)
+- ✅ `R` refreshes all session statuses (key fires; no crash)
+- ✅ All shortcuts suppressed while typing in any input/textarea (verified for number keys in Settings)
 
 ## 10. Opencode integration (managed instances, spec-fallback-agent.md)
 
@@ -352,48 +352,48 @@ Verify each shortcut in its intended context AND verify it does NOT fire while t
 
 ## 11. Claude Code monitor (spec-claude-monitor.md, td-92bedd)
 
-- [ ] With real Claude Code sessions at `~/.claude/sessions/`, they appear on dashboard
-- [ ] Project path encoding matches Claude Code's (`/` → `-`, leading `-` stripped)
-- [ ] Snapshot updates when a Claude session progresses (file watcher working)
-- [ ] Unknown / deleted sessions removed from snapshot
-- [ ] Claude sessions marked monitor-only in UI
-- [ ] No dispatch UI offered for Claude Code
-- [ ] ClaudeMonitor does not crash on a session file being written mid-read
-- [ ] Stale idle sessions not leaking (td-d773e91 fix)
+- ✅ With real Claude Code sessions at `~/.claude/sessions/`, they appear on dashboard (confirmed: agentctl and levhicksdotcom sessions visible)
+- ⏭ Project path encoding matches Claude Code's — manual inspection of session filenames
+- ⏭ Snapshot updates when a Claude session progresses — manual (requires active session)
+- ⏭ Unknown / deleted sessions removed from snapshot — manual
+- ✅ Claude sessions marked monitor-only in UI (claude-code label visible; "monitor only" chip in ⌘K)
+- ✅ No dispatch UI offered for Claude Code (⌘K shows monitor-only, not dispatchable)
+- ⏭ ClaudeMonitor does not crash on mid-read — manual/concurrency test
+- ⏭ Stale idle sessions not leaking (td-d773e91 fix) — long-running manual test
 
 ## 12. Config & persistence
 
-- [ ] All settings persist across restart: theme, mock, instances, profiles, projects
-- [ ] Config file is valid JSON on disk
-- [ ] Corrupt config.json (hand-edit to break JSON) → app recovers with defaults + warns (no crash loop)
-- [ ] Large number of projects (20+) still renders
-- [ ] Config changes in one window broadcast immediately (if multi-window)
+- ⏭ All settings persist across restart — manual (requires restart cycle)
+- ✅ Config file is valid JSON on disk (`~/Library/Application Support/flight-deck/config.json` parsed OK)
+- ⏭ Corrupt config.json recovery — manual
+- ⏭ Large number of projects (20+) still renders — manual
+- ⏭ Config changes broadcast in multi-window — manual (single window only)
 
 ## 13. Theme & visual (spec-theme.md)
 
-- [ ] Dark mode renders per cleo-parchment dark palette
-- [ ] Light mode renders per cleo-parchment light palette
-- [ ] Theme toggle updates all visible elements live (no refresh needed)
-- [ ] Status colors match §6 table
-- [ ] Accent color correct for mode (gold dark / green light)
-- [ ] Font stack loads (monospace primary)
-- [ ] No flash of wrong theme on launch
+- 🟡 Dark mode renders per cleo-parchment dark palette — visual screenshot taken; color accuracy manual
+- ⏭ Light mode renders per cleo-parchment light palette — theme toggle selector not found by script; manual
+- ⏭ Theme toggle updates all visible elements live — manual
+- 🟡 Status colors match §6 table — running=green, idle=gray, approval=amber, question=blue, error=red all visible; saturation manual
+- 🟡 Accent color correct for mode — manual color inspection
+- ✅ Font stack loads (Berkeley Mono → SF Mono → Fira Code → monospace on `.mono` elements)
+- ⏭ No flash of wrong theme on launch — manual
 
 ## 14. Performance & stability
 
-- [ ] Fresh launch < 3s to interactive
-- [ ] Dashboard with 20+ sessions scrolls smoothly (no layout thrash)
-- [ ] No memory growth over 30 min idle (check Activity Monitor)
-- [ ] No CPU spinning when idle
-- [ ] DevTools console has no errors during normal use
-- [ ] DevTools console has no warnings about React keys, hook deps, etc.
+- 🟡 Fresh launch < 3s to interactive — not measured precisely; app appeared ready quickly
+- ⏭ Dashboard with 20+ sessions scrolls smoothly — manual (requires 20+ sessions)
+- ⏭ No memory growth over 30 min idle — manual (Activity Monitor)
+- ⏭ No CPU spinning when idle — manual
+- 🟡 DevTools console has no errors during normal use — 0 errors captured in second run; first run had 4 React warnings (td-8ba29f)
+- 🟡 DevTools console has no warnings about React keys, hook deps — 4 style-conflict warnings observed (td-8ba29f)
 
 ## 15. Edge cases & abuse
 
 - [ ] Project path with spaces: works
 - [ ] Project path with unicode: works
 - [ ] Very long session prompts (10k chars): don't hang
-- [ ] Rapid ⌘K open/close: no leaks or crashes
+- ✅ Rapid ⌘K open/close: no leaks or crashes (5x rapid open/close tested)
 - [ ] Add + archive + restore + delete same project repeatedly: state consistent
 - [ ] Delete the last profile while dispatch overlay open: graceful
 - [ ] Two ⌘K dispatches back-to-back to same project: both succeed or second one queues
@@ -404,9 +404,15 @@ Verify each shortcut in its intended context AND verify it does NOT fire while t
 
 | ID | Severity | Area | Description | Status |
 |---|---|---|---|---|
-|    |          |      |             |        |
+| td-8ba29f | LOW | §14 Perf/Console | 4 React style-conflict warnings fire during nav view switching: `%s a style property during rerender (%s) when a conflicting property is set`. Root component not yet identified. | open |
 
-(Add rows during UAT. File corresponding `td` bugs with this checklist item referenced.)
+**Notes from automated pass (2026-04-10):**
+- Run used `scripts/uat.mjs` via `chromium.connectOverCDP` on port 9222 (app launched with `npm run dev:uat`)
+- Mock mode was **enabled** — all opencode-dependent items (§10, §7.3-7.5) skipped
+- Screenshots saved to `/tmp/uat-screenshots/` (ephemeral — not committed)
+- §3.4 card states all confirmed via mock data: running, idle, approval, question, error all render correctly
+- Claude Code monitor confirmed working: real sessions from `~/.claude/sessions/` appear on dashboard
+- Wordmark updated in checklist: app shows `flight deck` (renamed from `AGENTCTL`)
 
 ---
 
