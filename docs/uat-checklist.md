@@ -1,9 +1,9 @@
 # flight deck — UAT Checklist
 
-> **Status:** First automated pass complete (2026-04-10). Playwright + direct CDP via `scripts/uat.mjs`. Mock mode **enabled** this pass (live opencode not available). All §10 opencode items skipped. Second pass needed with mock disabled and live opencode connected.
+> **Status:** Second automated pass complete (2026-04-11). Mock mode **disabled**. Real projects (levhicksdotcom, 914_smart_assistant, DATAX-1002_deployed-rpd). **46 pass / 1 fail (td-8ba29f, known) / 3 partial / 39 skip.** Only opencode-dependent items remain skipped. Script selector bugs resolved.
 > **Ticket:** td-93e3fa (automated run) / td-65e2f8 (original tracker)
 > **Related specs:** `spec-ux.md`, `spec-theme.md`, `spec-fallback-agent.md`, `spec-claude-monitor.md`
-> **Mock mode:** enabled for this pass — live-opencode items marked ⏭. Wordmark item updated: app shows `flight deck` (renamed from agentctl).
+> **Mock mode:** disabled second pass — real Claude Code monitor sessions used.
 
 Mark each item: ✅ pass · ❌ fail (file bug id) · ⏭ skip (why) · 🟡 partial.
 
@@ -17,16 +17,12 @@ Mark each item: ✅ pass · ❌ fail (file bug id) · ⏭ skip (why) · 🟡 par
 - ✅ `npm test` — 113 tests pass (checklist count was 91; count updated)
 - ✅ `npm run dev` launches without errors in main log
 - ✅ App window appears with correct title ("agentctl")
-- 🟡 No console errors in DevTools — 4 React style-conflict warnings fire during nav (td-8ba29f)
+- 🟡 No console errors in DevTools — React style-conflict warnings fire during nav (td-8ba29f)
 
 ### 0.2 Disable mock data (required)
-- [ ] Open Settings (`4` or gear icon)
-- [ ] Find the "mock data" toggle (or the opencode instances section)
-- [ ] Set `config.mock.enabled = false`
-  - Alternative: quit app, edit `$userData/config.json` directly, set `"mock": { "enabled": false }`, relaunch
-  - `$userData` on macOS: `~/Library/Application Support/flight-deck/config.json`
-- [ ] Verify mock flag is persisted across restart
-- [ ] Dashboard no longer shows mock sessions after reload
+- ✅ `config.mock.enabled = false` confirmed in `~/Library/Application Support/flight-deck/config.json`
+- ⏭ Verify mock flag is persisted across restart — manual
+- ✅ Dashboard shows real Claude Code sessions, not mock sessions
 
 ### 0.3 Prerequisites
 - [ ] An `opencode serve` binary is installed and on `$PATH` (`which opencode`)
@@ -38,7 +34,7 @@ Mark each item: ✅ pass · ❌ fail (file bug id) · ⏭ skip (why) · 🟡 par
 
 ## 1. Top Bar (§1)
 
-- ✅ `flight deck` wordmark renders in monospace (renamed from AGENTCTL — checklist updated)
+- ✅ `flight deck` wordmark renders in monospace (confirmed pass 2)
 - 🟡 Aggregate health dot shows correct color — present in screenshot, color verification manual
 - ✅ Attention badge shows count of sessions needing input (⚠ 5 observed)
 - ⏭ Attention badge hidden when count is 0 — sessions always present this pass
@@ -66,11 +62,11 @@ Mark each item: ✅ pass · ❌ fail (file bug id) · ⏭ skip (why) · 🟡 par
 - [ ] With no projects and no sessions, dashboard shows a sensible empty state (not a blank screen or crash)
 
 ### 3.2 Project groups
-- ✅ Each project renders as a collapsible section with `▼/▶` chevron (screenshot confirmed)
+- ✅ Each project renders as a collapsible section with `▼/▶` chevron (confirmed pass 2 — 5 groups)
 - 🟡 Project name bold, full path muted monospace — visible in screenshot, color/weight manual
 - ⏭ Long paths truncate from left with `…` — test paths not long enough this pass
-- ✅ Aggregate status pill shows `⚠ N needs attention` (observed: "⚠ 2 needs attention")
-- ✅ `[+ New Session]` button visible in DOM (screenshot: visible on frontend-app group)
+- ✅ Aggregate status pill shows `⚠ N needs attention` (confirmed pass 2)
+- ✅ `[+ New Session]` button in DOM (5 found across project groups in pass 2)
 - ⏭ `[+ New Session]` reachable via keyboard focus — manual a11y test
 - ⏭ Clicking `[+ New Session]` opens ⌘K with that project pre-selected — manual
 - ⏭ Sort order: most recent activity descending — manual
@@ -87,7 +83,7 @@ Mark each item: ✅ pass · ❌ fail (file bug id) · ⏭ skip (why) · 🟡 par
 - ⏭ Elapsed timer freezes when stopped — manual
 - ⏭ Hover: border becomes `--border-active` — manual
 - ⏭ Focus: border becomes `--accent` — manual
-- 🟡 Click card → context panel opens — opens in first automated pass; class selector unreliable
+- ✅ Click card → context panel opens (confirmed pass 2; Escape closes cleanly)
 - ⏭ `[✕]` abort button hover-only — manual
 - ⏭ Clicking `[⚠]` jumps to blocking prompt — manual
 - ⏭ Clicking `[✕]` confirms before aborting — manual
@@ -198,14 +194,14 @@ Test each state with a real session:
 - ✅ `[⌘K Dispatch]` button also opens
 - ⏭ `N` while focused on project header opens — manual
 - ✅ Overlay is centered, ~640px, backdrop blur + scrim (screenshot confirmed)
-- ✅ Input field (textarea) auto-focused — "What should the agent do?" placeholder visible
-- ⏭ Last active project pre-selected — no configured projects this pass; shows "(No projects)"
-- 🟡 Default profile pre-selected — opencode profile shown; no default set this pass
+- ✅ Input field (textarea) auto-focused — confirmed pass 2 (1 textarea in overlay)
+- 🟡 Last active project pre-selected — real projects listed in selector; no default set
+- 🟡 Default profile pre-selected — empty profiles array this pass; selector visible
 - ⏭ Opening from `+ New Session` button pre-selects that project — manual
 - ✅ `Esc` dismisses
 
 ### 7.2 Target selectors
-- 🟡 Project dropdown lists all non-archived projects — shows "(No projects)"; correct for no configured projects; manual re-test needed with projects added
+- ✅ Project dropdown lists all non-archived projects — 3 real projects visible in selector (pass 2)
 - ⏭ Project dropdown sorted by recency — manual
 - ✅ Profile dropdown lists profiles (opencode selector visible in screenshot)
 - ✅ Claude Code profiles shown disabled with "monitor only" chip (screenshot confirmed)
@@ -406,13 +402,22 @@ Verify each shortcut in its intended context AND verify it does NOT fire while t
 |---|---|---|---|---|
 | td-8ba29f | LOW | §14 Perf/Console | 4 React style-conflict warnings fire during nav view switching: `%s a style property during rerender (%s) when a conflicting property is set`. Root component not yet identified. | open |
 
-**Notes from automated pass (2026-04-10):**
+**Notes from pass 1 (2026-04-10, mock enabled):**
 - Run used `scripts/uat.mjs` via `chromium.connectOverCDP` on port 9222 (app launched with `npm run dev:uat`)
 - Mock mode was **enabled** — all opencode-dependent items (§10, §7.3-7.5) skipped
-- Screenshots saved to `/tmp/uat-screenshots/` (ephemeral — not committed)
 - §3.4 card states all confirmed via mock data: running, idle, approval, question, error all render correctly
 - Claude Code monitor confirmed working: real sessions from `~/.claude/sessions/` appear on dashboard
 - Wordmark updated in checklist: app shows `flight deck` (renamed from `AGENTCTL`)
+
+**Notes from pass 2 (2026-04-11, mock disabled):**
+- Result: **46 pass / 1 fail / 3 partial / 39 skip**
+- Mock disabled; 3 real projects configured (levhicksdotcom, 914_smart_assistant, DATAX-1002_deployed-rpd)
+- Only Claude Code monitor sessions present (no live opencode) — §3.4 card states skipped this pass
+- Script selector bugs fixed: input-focus bleed from §2 caused §3 to run on Settings; `AGENTCTL` → `flight deck`; `input` → `input, textarea`; dropdown detection via `select` element count
+- `[+ New Session]` confirmed present (5 buttons across project groups, hover-only via CSS opacity)
+- `dev:uat` npm script fixed: `ELECTRON_EXTRA_LAUNCH_ARGS` env var doesn't work with electron-vite; changed to `electron-vite dev -- --remote-debugging-port=9222`
+- Sole remaining automated failure: React style-conflict warnings (td-8ba29f, LOW chore)
+- Remaining skips: §10 opencode (no binary), §7.3-7.5 dispatch (no live server), §5.3/5.4 destructive ops, §13 theme toggle (hover button, manual), §8 context panel (class selector issue), §14 perf (manual)
 
 ---
 

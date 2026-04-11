@@ -5,7 +5,7 @@
   "main": "./out/main/index.mjs",
   "scripts": {
     "dev": "electron-vite dev",
-    "dev:uat": "ELECTRON_EXTRA_LAUNCH_ARGS=--remote-debugging-port=9222 electron-vite dev",
+    "dev:uat": "electron-vite dev -- --remote-debugging-port=9222",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
