@@ -120,8 +120,10 @@ export function CmdKDispatch({
     const stillThere = target?.sessions.some(
       (s) =>
         s.id === sessionMode &&
-        s.agentType === 'opencode' &&
-        (s.state === 'running' || s.state === 'idle' || s.state === 'question')
+        (
+          (s.agentType === 'opencode' && (s.state === 'running' || s.state === 'idle' || s.state === 'question')) ||
+          (s.agentType === 'claude-code' && (s.state === 'idle' || s.state === 'error'))
+        )
     )
     if (!stillThere) setSessionMode('new')
   }, [target, sessionMode])
@@ -139,18 +141,35 @@ export function CmdKDispatch({
       if (useMock) {
         console.warn('[cmdk] mock mode — dispatch is a no-op', { target: target.path, text, sessionMode })
       } else if (sessionMode !== 'new') {
-        // Append to existing session.
-        const api = window.electronAPI?.opencode
-        if (!api) throw new Error('bridge unavailable')
-        setBusyLabel('sending…')
-        // Slash command routing for append-to-existing-session path.
-        const parsed = parseSlashCommand(text)
-        if (parsed) {
-          await api.sendCommand(sessionMode, parsed.command, parsed.args)
+        // Find the target session to determine agent type
+        const targetSession = target.sessions.find((s) => s.id === sessionMode)
+
+        if (targetSession?.agentType === 'claude-code') {
+          // Resume claude-code session via subprocess
+          const api = window.electronAPI?.instance
+          if (!api) throw new Error('bridge unavailable')
+          setBusyLabel('resuming…')
+          const res = await api.dispatch({
+            profileId: selectedProfileId,
+            directory: target.path,
+            prompt: text,
+            sessionId: sessionMode,
+          })
+          onDispatched(res.sessionId)
         } else {
-          await api.sendPrompt(sessionMode, text.startsWith('\\/') ? text.slice(1) : text)
+          // Append to existing opencode session.
+          const api = window.electronAPI?.opencode
+          if (!api) throw new Error('bridge unavailable')
+          setBusyLabel('sending…')
+          // Slash command routing for append-to-existing-session path.
+          const parsed = parseSlashCommand(text)
+          if (parsed) {
+            await api.sendCommand(sessionMode, parsed.command, parsed.args)
+          } else {
+            await api.sendPrompt(sessionMode, text.startsWith('\\/') ? text.slice(1) : text)
+          }
+          onDispatched(sessionMode)
         }
-        onDispatched(sessionMode)
       } else if (selectedProfileId) {
         // Managed dispatch: launcher starts opencode serve if needed.
         const api = window.electronAPI?.instance
@@ -350,12 +369,14 @@ export function CmdKDispatch({
             {target?.sessions
               .filter(
                 (s) =>
-                  s.agentType === 'opencode' &&
-                  (s.state === 'running' || s.state === 'idle' || s.state === 'question')
+                  (s.agentType === 'opencode' &&
+                    (s.state === 'running' || s.state === 'idle' || s.state === 'question')) ||
+                  (s.agentType === 'claude-code' && (s.state === 'idle' || s.state === 'error'))
               )
               .map((s) => (
                 <option key={s.id} value={s.id}>
-                  Append to: #{s.id.slice(-4)} ({s.state})
+                  {s.agentType === 'claude-code' ? 'Resume: ' : 'Append to: '}
+                  #{s.id.slice(-4)} ({s.state})
                 </option>
               ))}
           </select>

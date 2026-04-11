@@ -64,6 +64,7 @@ export interface ElectronAPI {
       profileId: string
       directory: string
       prompt: string
+      sessionId?: string
     }) => Promise<{ sessionId: string }>
   }
   http: {
