@@ -108,6 +108,31 @@ export class ClaudeMonitor extends EventEmitter {
     return { projects }
   }
 
+  /**
+   * Register a session launched by ClaudeLauncher so the monitor can begin
+   * watching its JSONL file immediately, before ~/.claude/sessions/<pid>.json
+   * is written by the CLI.
+   *
+   * This injects a synthetic ProcessEntry into this.processes so that
+   * refreshSessionByJsonl does not reject the session as untracked.
+   */
+  trackLaunchedSession(entry: {
+    pid: number
+    sessionId: string
+    cwd: string
+    startedAt: number
+  }): void {
+    if (this.processes.has(entry.pid)) return
+    const processEntry: ProcessEntry = {
+      pid: entry.pid,
+      sessionId: entry.sessionId,
+      cwd: entry.cwd,
+      startedAt: entry.startedAt
+    }
+    this.processes.set(processEntry.pid, processEntry)
+    void this.refreshSession(processEntry)
+  }
+
   // ── Session file watching ──────────────────────────────────────────────────
 
   private watchSessions(): void {
