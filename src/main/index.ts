@@ -5,6 +5,8 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { is } from '@electron-toolkit/utils'
 import { configStore } from './config/store'
+import { HttpServer } from './http/index'
+import { getMobileRoot } from './http/static'
 import { opencodeRegistry } from './opencode/registry'
 import { claudeMonitor } from './claude/monitor'
 import { opencodeFileWatchMonitor } from './adapters/file-watch'
@@ -131,6 +133,84 @@ app.whenReady().then(async () => {
   opencodeRegistry.start()
   claudeMonitor.start()
   opencodeFileWatchMonitor.start()
+
+  // ── HTTP server (Slice 3.2 / 3.4) ────────────────────────────────────────
+  const hs = new HttpServer({
+    getSnapshot: () => opencodeRegistry.snapshot(),
+    onSnapshotChange: (cb) => {
+      opencodeRegistry.on('change', cb)
+      return () => opencodeRegistry.removeListener('change', cb)
+    },
+    dispatch: async (args) => {
+      const cfg = configStore.get()
+      const profile = cfg.profiles.find((p) => p.id === args.profileId)
+      if (!profile) throw new Error(`profile ${args.profileId} not found`)
+      if (profile.agentType === 'claude-code') {
+        if (!claudeLauncher) throw new Error('claude launcher not ready')
+        return claudeLauncher.launch(profile, args.directory, args.prompt)
+      }
+      if (profile.agentType === 'opencode') {
+        const { opencodeLauncher: ol } = await import('./opencode/launcher')
+        const { opencodeRegistry: reg } = await import('./opencode/registry')
+        const { waitForClientConnected } = await import('./util/shell')
+        const port = await ol.launch(profile, args.directory)
+        const managedKey = `managed:${args.profileId}:${args.directory}`
+        const client = reg.ensureManagedClient({ host: '127.0.0.1', port, label: profile.label }, managedKey)
+        await waitForClientConnected(client)
+        const sessionId = await client.createSession(args.directory)
+        await client.sendPrompt(sessionId, args.prompt)
+        return { sessionId }
+      }
+      throw new Error(`unsupported agent type: ${profile.agentType}`)
+    },
+    respond: async (sessionId, permissionId, response) => {
+      const client = opencodeRegistry.findClientForSession(sessionId)
+      if (!client) throw new Error(`no client owns session ${sessionId}`)
+      await client.respondPermission(sessionId, permissionId, response)
+    },
+    abort: async (sessionId) => {
+      const client = opencodeRegistry.findClientForSession(sessionId)
+      if (!client) throw new Error(`no client owns session ${sessionId}`)
+      await client.abortSession(sessionId)
+    },
+    getToken: () => configStore.get().http.token,
+    getMobileRoot,
+  })
+  httpServer = hs
+
+  hs.on('listening', ({ host, port }: { host: string; port: number }) => {
+    broadcast('http:status', { status: 'listening', host, port })
+  })
+  hs.on('error', (err: Error) => {
+    broadcast('http:status', { status: 'error', message: err.message })
+  })
+  hs.on('stopped', () => {
+    broadcast('http:status', { status: 'stopped' })
+  })
+
+  const httpCfg = configStore.get().http
+  if (httpCfg.enabled) {
+    try {
+      await hs.start(httpCfg.bindAddress, httpCfg.port)
+    } catch (err) {
+      console.error('[main] HTTP server failed to start:', err)
+      broadcast('http:status', { status: 'error', message: String(err) })
+    }
+  }
+
+  configStore.on('change', async (next: import('../shared/types').AppConfig) => {
+    if (next.http.enabled) {
+      try {
+        await hs.restart(next.http.bindAddress, next.http.port)
+      } catch (err) {
+        console.error('[main] HTTP server restart failed:', err)
+        broadcast('http:status', { status: 'error', message: String(err) })
+      }
+    } else {
+      await hs.stop()
+    }
+  })
+
   createWindow()
 })
 
@@ -148,6 +228,7 @@ app.on('window-all-closed', () => {
  * by init.
  */
 let claudeLauncher: import('./claude/launcher').ClaudeLauncher | null = null
+let httpServer: HttpServer | null = null
 let shuttingDown = false
 app.on('before-quit', (event) => {
   if (shuttingDown) return
@@ -158,7 +239,11 @@ app.on('before-quit', (event) => {
       opencodeRegistry.dispose()
       claudeMonitor.dispose()
       opencodeFileWatchMonitor.dispose()
-      await Promise.all([opencodeLauncher.stopAllAsync(), claudeLauncher?.stopAllAsync() ?? Promise.resolve()])
+      await Promise.all([
+        opencodeLauncher.stopAllAsync(),
+        claudeLauncher?.stopAllAsync() ?? Promise.resolve(),
+        httpServer?.stop() ?? Promise.resolve(),
+      ])
     } catch (e) {
       console.error('[main] error during shutdown:', e)
     } finally {

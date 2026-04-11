@@ -66,6 +66,9 @@ export interface ElectronAPI {
       prompt: string
     }) => Promise<{ sessionId: string }>
   }
+  http: {
+    onStatus: (cb: (status: { status: string; host?: string; port?: number; message?: string }) => void) => () => void
+  }
 }
 
 declare global {
