@@ -2,6 +2,7 @@ import { configStore } from '../config/store'
 import { opencodeRegistry } from '../opencode/registry'
 import { opencodeLauncher } from '../opencode/launcher'
 import { safeHandle } from './_helpers'
+import { waitForClientConnected } from '../util/shell'
 
 export function register(): void {
   safeHandle(
@@ -22,28 +23,7 @@ export function register(): void {
       // Ensure the registry has a connected client for this instance.
       const client = opencodeRegistry.ensureManagedClient(instance, managedKey)
 
-      // Wait for the client to reach 'connected'. Use .on (not .once) so that
-      // intermediate 'reconnecting' or 'connecting' events don't consume the
-      // listener before 'connected' arrives.
-      await new Promise<void>((resolve, reject) => {
-        if (client.snapshot().status === 'connected') return resolve()
-        const timeout = setTimeout(() => {
-          client.off('status', onStatus)
-          reject(new Error('client connect timeout'))
-        }, 8000)
-        function onStatus(ev: { status: string }): void {
-          if (ev.status === 'connected') {
-            clearTimeout(timeout)
-            client.off('status', onStatus)
-            resolve()
-          } else if (ev.status === 'error') {
-            clearTimeout(timeout)
-            client.off('status', onStatus)
-            reject(new Error('opencode client error'))
-          }
-        }
-        client.on('status', onStatus)
-      })
+      await waitForClientConnected(client)
 
       const sessionId = await client.createSession(args.directory)
       await client.sendPrompt(sessionId, args.prompt)

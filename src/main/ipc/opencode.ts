@@ -1,36 +1,6 @@
-import { execFile } from 'child_process'
 import { opencodeRegistry } from '../opencode/registry'
 import { safeHandle } from './_helpers'
-
-function runCmd(
-  cmd: string,
-  args: string[],
-  cwd: string
-): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve) => {
-    execFile(
-      cmd,
-      args,
-      { cwd, maxBuffer: 10 * 1024 * 1024 },
-      (err, stdout, stderr) => {
-        resolve({
-          stdout: stdout?.toString() ?? '',
-          stderr: stderr?.toString() ?? '',
-          code: err ? (err as NodeJS.ErrnoException & { code?: number }).code ?? 1 : 0
-        })
-      }
-    )
-  })
-}
-
-/**
- * Reject paths that are empty, non-absolute, contain NULs, or start with a
- * dash — execFile avoids shell injection, but both git and td will interpret
- * a leading-dash path as an option flag.
- */
-function validPath(p: string): boolean {
-  return typeof p === 'string' && p.length > 0 && p.startsWith('/') && !p.includes('\0')
-}
+import { runCmd, validPath, waitForClientConnected } from '../util/shell'
 
 export function register(broadcast: (channel: string, payload: unknown) => void): void {
   safeHandle('opencode:snapshot', () => opencodeRegistry.snapshot())
@@ -104,32 +74,7 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
       if (!maybeClient) throw new Error('no opencode client available')
       const client = maybeClient
 
-      // Wait for the client to reach 'connected' before creating a session —
-      // otherwise createSession can race the hydrate window and the resulting
-      // session id may not show up in the next SSE snapshot immediately, or
-      // the HTTP request can fail against a still-initialising server.
-      // Uses .on (not .once) so intermediate 'reconnecting'/'connecting'
-      // events don't consume the listener before 'connected' arrives.
-      if (client.snapshot().status !== 'connected') {
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            client.off('status', onStatus)
-            reject(new Error('opencode client connect timeout'))
-          }, 8000)
-          function onStatus(ev: { status: string }): void {
-            if (ev.status === 'connected') {
-              clearTimeout(timeout)
-              client.off('status', onStatus)
-              resolve()
-            } else if (ev.status === 'error') {
-              clearTimeout(timeout)
-              client.off('status', onStatus)
-              reject(new Error('opencode client error'))
-            }
-          }
-          client.on('status', onStatus)
-        })
-      }
+      await waitForClientConnected(client)
 
       const id = await client.createSession(args.directory, args.title)
       await client.sendPrompt(id, args.prompt)

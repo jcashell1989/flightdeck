@@ -1,34 +1,9 @@
 import { dialog } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
-import { execFile } from 'child_process'
 import { configStore, ProjectConfig } from '../config/store'
 import { safeHandle } from './_helpers'
-
-function runCmd(
-  cmd: string,
-  args: string[],
-  cwd: string
-): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve) => {
-    execFile(
-      cmd,
-      args,
-      { cwd, maxBuffer: 10 * 1024 * 1024 },
-      (err, stdout, stderr) => {
-        resolve({
-          stdout: stdout?.toString() ?? '',
-          stderr: stderr?.toString() ?? '',
-          code: err ? (err as NodeJS.ErrnoException & { code?: number }).code ?? 1 : 0
-        })
-      }
-    )
-  })
-}
-
-function validPath(p: string): boolean {
-  return typeof p === 'string' && p.length > 0 && p.startsWith('/') && !p.includes('\0')
-}
+import { runCmd, validPath } from '../util/shell'
 
 export function register(): void {
   /** Validate a project path and return its status. */
