@@ -1,8 +1,8 @@
-# agentctl — Claude Code Passive Monitor Design
+# flight deck — Claude Code Monitor Design
 
-> Status: Design complete. Awaiting approval.
-> Ticket: td-4a41eb
-> Last updated: 2026-04-07
+> Status: Implemented and UAT-verified.
+> Ticket: td-4a41eb (monitor) · td-8b02fa (dispatch)
+> Last updated: 2026-04-11
 
 ---
 

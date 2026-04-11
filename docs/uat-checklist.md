@@ -175,7 +175,7 @@ Test each state with a real session:
 - ⏭ API key plaintext never appears in DOM attributes — manual (inspect element)
 - ⏭ Default column is a radio — manual
 - ⏭ Deleting the default profile — manual
-- ✅ Claude Code profiles disabled/marked monitor-only (⌘K screenshot: "monitor only" chip visible)
+- [ ] Claude Code profiles selectable in Settings (no disabled/monitor-only constraint) — Phase 1
 - ⏭ New profile gets a persistent UUID — manual
 - ⏭ Profile persists across app restart — manual
 
@@ -204,7 +204,7 @@ Test each state with a real session:
 - ✅ Project dropdown lists all non-archived projects — 3 real projects visible in selector (pass 2)
 - ⏭ Project dropdown sorted by recency — manual
 - ✅ Profile dropdown lists profiles (opencode selector visible in screenshot)
-- ✅ Claude Code profiles shown disabled with "monitor only" chip (screenshot confirmed)
+- [ ] Claude Code profiles shown without disabled constraint; Provider/API Key columns show "—" — Phase 1
 - ✅ Session mode dropdown visible ("New session" shown):
   - [ ] `New session` default
   - [ ] `Append to: #short-id (state)` for each existing opencode session in target project
@@ -236,7 +236,7 @@ Test each state with a real session:
 - [ ] Closing overlay during busy doesn't leak the request
 
 ### 7.6 Monitor-only guard
-- [ ] Selecting Claude Code: inline warning "monitor-only. Switch to opencode?"
+- [ ] Selecting Claude Code: dispatch works (no monitor-only warning) — Phase 1
 - [ ] `[Switch]` changes profile to an opencode one
 
 ## 8. Context Panel (§3)
@@ -352,8 +352,9 @@ Verify each shortcut in its intended context AND verify it does NOT fire while t
 - ⏭ Project path encoding matches Claude Code's — manual inspection of session filenames
 - ⏭ Snapshot updates when a Claude session progresses — manual (requires active session)
 - ⏭ Unknown / deleted sessions removed from snapshot — manual
-- ✅ Claude sessions marked monitor-only in UI (claude-code label visible; "monitor only" chip in ⌘K)
-- ✅ No dispatch UI offered for Claude Code (⌘K shows monitor-only, not dispatchable)
+- [ ] Claude sessions appear on dashboard with agentType badge — Phase 1
+- [ ] Claude Code sessions dispatchable from ⌘K (new session) — Phase 1
+- [ ] Dispatched Claude Code session appears on dashboard within ~5s — Phase 1
 - ⏭ ClaudeMonitor does not crash on mid-read — manual/concurrency test
 - ⏭ Stale idle sessions not leaking (td-d773e91 fix) — long-running manual test
 
