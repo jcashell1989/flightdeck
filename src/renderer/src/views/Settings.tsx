@@ -664,21 +664,25 @@ function ProfileRow({
           }}
         >
           {AGENT_TYPES.map((t) => (
-            <option key={t} value={t} disabled={t === 'claude-code'}>
-              {t === 'claude-code' ? `${t} (monitor-only)` : t}
+            <option key={t} value={t}>
+              {t}
             </option>
           ))}
         </select>
       </td>
-      {/* Provider */}
+      {/* Provider — hidden for claude-code (uses keychain auth) */}
       <td style={{ padding: '4px 8px' }}>
-        <input
-          value={provider}
-          onChange={(e) => setProvider(e.target.value)}
-          onBlur={commit}
-          onKeyDown={handleKeyDown}
-          style={profileInputStyle}
-        />
+        {agentType !== 'claude-code' ? (
+          <input
+            value={provider}
+            onChange={(e) => setProvider(e.target.value)}
+            onBlur={commit}
+            onKeyDown={handleKeyDown}
+            style={profileInputStyle}
+          />
+        ) : (
+          <span style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>—</span>
+        )}
       </td>
       {/* Model */}
       <td style={{ padding: '4px 8px' }}>
@@ -690,45 +694,49 @@ function ProfileRow({
           style={profileInputStyle}
         />
       </td>
-      {/* API Key — password field; reveal requires explicit eye-icon click */}
+      {/* API Key — hidden for claude-code; password field otherwise */}
       <td style={{ padding: '4px 8px', width: 120 }}>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <input
-            type={apiKeyVisible ? 'text' : 'password'}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            onBlur={() => {
-              // Re-mask on blur so the key never stays visible unattended.
-              setApiKeyVisible(false)
-              commit()
-            }}
-            onKeyDown={handleKeyDown}
-            // autoComplete=off + data-1p-ignore to discourage password managers
-            // from treating this as a login field.
-            autoComplete="off"
-            data-1p-ignore="true"
-            style={{ ...profileInputStyle, paddingRight: 24 }}
-          />
-          <button
-            type="button"
-            onClick={() => setApiKeyVisible((v) => !v)}
-            aria-label={apiKeyVisible ? 'Hide API key' : 'Show API key'}
-            title={apiKeyVisible ? 'Hide' : 'Show'}
-            style={{
-              position: 'absolute',
-              right: 4,
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--fg-subtle)',
-              cursor: 'pointer',
-              padding: 0,
-              fontSize: 11,
-              lineHeight: 1
-            }}
-          >
-            {apiKeyVisible ? '○' : '●'}
-          </button>
-        </div>
+        {agentType !== 'claude-code' ? (
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <input
+              type={apiKeyVisible ? 'text' : 'password'}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              onBlur={() => {
+                // Re-mask on blur so the key never stays visible unattended.
+                setApiKeyVisible(false)
+                commit()
+              }}
+              onKeyDown={handleKeyDown}
+              // autoComplete=off + data-1p-ignore to discourage password managers
+              // from treating this as a login field.
+              autoComplete="off"
+              data-1p-ignore="true"
+              style={{ ...profileInputStyle, paddingRight: 24 }}
+            />
+            <button
+              type="button"
+              onClick={() => setApiKeyVisible((v) => !v)}
+              aria-label={apiKeyVisible ? 'Hide API key' : 'Show API key'}
+              title={apiKeyVisible ? 'Hide' : 'Show'}
+              style={{
+                position: 'absolute',
+                right: 4,
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--fg-subtle)',
+                cursor: 'pointer',
+                padding: 0,
+                fontSize: 11,
+                lineHeight: 1
+              }}
+            >
+              {apiKeyVisible ? '○' : '●'}
+            </button>
+          </div>
+        ) : (
+          <span style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>—</span>
+        )}
       </td>
       {/* Default radio */}
       <td style={{ padding: '4px 8px', width: 50, textAlign: 'center' }}>
@@ -800,20 +808,24 @@ function ProfileAddRow({ onAdd }: { onAdd: (draft: Omit<AgentProfile, 'id'>) => 
           style={{ ...profileInputStyle, cursor: 'pointer' }}
         >
           {AGENT_TYPES.map((t) => (
-            <option key={t} value={t} disabled={t === 'claude-code'}>
-              {t === 'claude-code' ? `${t} (monitor-only)` : t}
+            <option key={t} value={t}>
+              {t}
             </option>
           ))}
         </select>
       </td>
       <td style={{ padding: '4px 8px' }}>
-        <input
-          placeholder="Provider"
-          value={provider}
-          onChange={(e) => setProvider(e.target.value)}
-          onKeyDown={handleKeyDown}
-          style={profileInputStyle}
-        />
+        {agentType !== 'claude-code' ? (
+          <input
+            placeholder="Provider"
+            value={provider}
+            onChange={(e) => setProvider(e.target.value)}
+            onKeyDown={handleKeyDown}
+            style={profileInputStyle}
+          />
+        ) : (
+          <span style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>—</span>
+        )}
       </td>
       <td style={{ padding: '4px 8px' }}>
         <input
@@ -825,16 +837,20 @@ function ProfileAddRow({ onAdd }: { onAdd: (draft: Omit<AgentProfile, 'id'>) => 
         />
       </td>
       <td style={{ padding: '4px 8px', width: 120 }}>
-        <input
-          type="password"
-          placeholder="API Key"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          onKeyDown={handleKeyDown}
-          autoComplete="off"
-          data-1p-ignore="true"
-          style={profileInputStyle}
-        />
+        {agentType !== 'claude-code' ? (
+          <input
+            type="password"
+            placeholder="API Key"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            onKeyDown={handleKeyDown}
+            autoComplete="off"
+            data-1p-ignore="true"
+            style={profileInputStyle}
+          />
+        ) : (
+          <span style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>—</span>
+        )}
       </td>
       <td style={{ padding: '4px 8px', width: 50 }} />
       <td style={{ padding: '4px 8px', width: 24 }}>
