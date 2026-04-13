@@ -1,5 +1,6 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import * as QRCode from 'qrcode'
 import { AgentProfile, AppConfig, OpencodeInstance } from '../types'
 
 interface SettingsProps {
@@ -55,7 +56,276 @@ export function Settings({ config, setConfig }: SettingsProps) {
         <ProfileList />
         <Hint>One row per agent configuration. opencode profiles are dispatchable from ⌘K. API keys are encrypted at rest via OS keychain (Electron safeStorage). Click the dot next to the key field to reveal.</Hint>
       </Section>
+
+      <Section title="Remote Access">
+        <RemoteAccess config={config} setConfig={setConfig} />
+        <Hint>Expose the flight deck over HTTP so a mobile client can connect. Bind to 0.0.0.0 (or a Tailscale address) and share the pairing URL with your phone.</Hint>
+      </Section>
     </div>
+  )
+}
+
+// ── Remote Access ─────────────────────────────────────────────────────────────
+
+interface HttpStatus {
+  status: string
+  host?: string
+  port?: number
+  message?: string
+}
+
+function RemoteAccess({
+  config,
+  setConfig
+}: {
+  config: AppConfig
+  setConfig: (patch: Partial<AppConfig>) => Promise<boolean>
+}) {
+  const [httpStatus, setHttpStatus] = useState<HttpStatus | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+
+  useEffect(() => {
+    const api = window.electronAPI?.http
+    if (!api) return
+    return api.onStatus(setHttpStatus)
+  }, [])
+
+  const cfg = config.http
+
+  const pairingUrl =
+    cfg.enabled && cfg.bindAddress && cfg.port && cfg.token
+      ? `http://${cfg.bindAddress}:${cfg.port}/pair?token=${cfg.token}`
+      : ''
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !pairingUrl) return
+    QRCode.toCanvas(canvas, pairingUrl).catch(console.error)
+  }, [pairingUrl])
+
+  const handleEnabledChange = (): void => {
+    setConfig({ http: { ...cfg, enabled: !cfg.enabled } })
+  }
+
+  const handleBindAddressBlur = (value: string): void => {
+    const trimmed = value.trim()
+    if (trimmed && trimmed !== cfg.bindAddress) {
+      setConfig({ http: { ...cfg, bindAddress: trimmed } })
+    }
+  }
+
+  const handlePortBlur = (value: string): void => {
+    const parsed = parseInt(value, 10)
+    if (Number.isFinite(parsed) && parsed >= 1024 && parsed <= 65535 && parsed !== cfg.port) {
+      setConfig({ http: { ...cfg, port: parsed } })
+    }
+  }
+
+  const handleCopy = (): void => {
+    if (pairingUrl) navigator.clipboard.writeText(pairingUrl).catch(console.error)
+  }
+
+  const handleRegenerateToken = (): void => {
+    setConfig({ http: { ...cfg, token: crypto.randomUUID() } })
+  }
+
+  // Derive status label + color
+  let statusText = 'Stopped'
+  let statusColor = 'var(--fg-subtle)'
+  if (httpStatus) {
+    if (httpStatus.status === 'listening' && httpStatus.host && httpStatus.port) {
+      statusText = `Listening on ${httpStatus.host}:${httpStatus.port}`
+      statusColor = 'var(--status-ok, #4caf50)'
+    } else if (httpStatus.status === 'error') {
+      statusText = `Error: ${httpStatus.message ?? 'unknown'}`
+      statusColor = 'var(--status-error)'
+    } else {
+      statusText = 'Stopped'
+    }
+  }
+
+  return (
+    <div>
+      {/* Enable toggle + status */}
+      <Row>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={cfg.enabled}
+            onChange={handleEnabledChange}
+          />
+          <span style={{ fontSize: 13 }}>Enable remote access</span>
+        </label>
+        <span style={{ fontSize: 11, color: statusColor, marginLeft: 28, display: 'block', marginTop: 4 }}>
+          {statusText}
+        </span>
+      </Row>
+
+      {/* Bind address */}
+      <Row>
+        <FieldRow label="Bind address">
+          <SettingsInput
+            defaultValue={cfg.bindAddress}
+            placeholder="0.0.0.0"
+            onCommit={handleBindAddressBlur}
+          />
+        </FieldRow>
+      </Row>
+
+      {/* Port */}
+      <Row>
+        <FieldRow label="Port">
+          <SettingsInput
+            defaultValue={String(cfg.port)}
+            placeholder="7080"
+            inputMode="numeric"
+            onCommit={handlePortBlur}
+          />
+        </FieldRow>
+      </Row>
+
+      {/* Pairing URL */}
+      <Row>
+        <div style={{ fontSize: 12, color: 'var(--fg-subtle)', marginBottom: 4 }}>Pairing URL</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div
+            style={{
+              flex: 1,
+              fontFamily: 'monospace',
+              fontSize: 11,
+              color: 'var(--fg-muted)',
+              background: 'var(--bg-elevated, #1b1b1b)',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              padding: '4px 6px',
+              overflowX: 'auto',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {pairingUrl || <span style={{ color: 'var(--fg-subtle)' }}>—</span>}
+          </div>
+          <button
+            onClick={handleCopy}
+            disabled={!pairingUrl}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              color: 'var(--fg-muted)',
+              cursor: pairingUrl ? 'pointer' : 'not-allowed',
+              padding: '4px 8px',
+              fontSize: 12,
+              opacity: pairingUrl ? 1 : 0.4
+            }}
+          >
+            Copy
+          </button>
+        </div>
+      </Row>
+
+      {/* QR code */}
+      <Row>
+        <div style={{ marginTop: 8 }}>
+          {pairingUrl ? (
+            <canvas ref={canvasRef} style={{ display: 'block', borderRadius: 4 }} />
+          ) : (
+            <div
+              style={{
+                width: 160,
+                height: 160,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px dashed var(--border)',
+                borderRadius: 4,
+                fontSize: 11,
+                color: 'var(--fg-subtle)',
+                textAlign: 'center',
+                padding: 12
+              }}
+            >
+              Build mobile client first
+            </div>
+          )}
+        </div>
+      </Row>
+
+      {/* Regenerate token */}
+      <Row>
+        <button
+          onClick={handleRegenerateToken}
+          style={{
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            borderRadius: 4,
+            color: 'var(--fg-muted)',
+            cursor: 'pointer',
+            padding: '4px 10px',
+            fontSize: 12
+          }}
+        >
+          Regenerate token
+        </button>
+        <div style={{ fontSize: 11, color: 'var(--fg-subtle)', marginTop: 6 }}>
+          Regenerating the token will disconnect any active mobile sessions.
+        </div>
+      </Row>
+    </div>
+  )
+}
+
+function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <span style={{ fontSize: 12, color: 'var(--fg-subtle)', width: 96, flexShrink: 0 }}>{label}</span>
+      <div style={{ flex: 1, maxWidth: 240 }}>{children}</div>
+    </div>
+  )
+}
+
+function SettingsInput({
+  defaultValue,
+  placeholder,
+  inputMode,
+  onCommit
+}: {
+  defaultValue: string
+  placeholder?: string
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']
+  onCommit: (value: string) => void
+}) {
+  const [value, setValue] = useState(defaultValue)
+
+  // Resync when prop changes (e.g. config reloaded from main)
+  useEffect(() => {
+    setValue(defaultValue)
+  }, [defaultValue])
+
+  return (
+    <input
+      value={value}
+      placeholder={placeholder}
+      inputMode={inputMode}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => onCommit(value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        else if (e.key === 'Escape') {
+          setValue(defaultValue)
+          ;(e.target as HTMLInputElement).blur()
+        }
+      }}
+      style={{
+        width: '100%',
+        background: 'transparent',
+        border: '1px solid var(--border)',
+        borderRadius: 4,
+        color: 'var(--fg-primary)',
+        fontSize: 12,
+        padding: '4px 6px',
+        fontFamily: 'inherit'
+      }}
+    />
   )
 }
 

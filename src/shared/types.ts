@@ -57,9 +57,19 @@ export interface AgentProfile {
   isDefault: boolean
 }
 
+export interface HttpConfig {
+  enabled: boolean
+  /** Network interface to bind to. '0.0.0.0' = all interfaces (required for Tailscale). */
+  bindAddress: string
+  port: number
+  /** Bearer token for mobile client auth. Generated once at first run. Plaintext — local-network secret. */
+  token: string
+}
+
 export interface AppConfig {
   opencode: { instances: OpencodeInstance[] }
   mock: { enabled: boolean }
+  http: HttpConfig
   projects: ProjectConfig[]
   profiles: AgentProfile[]
 }

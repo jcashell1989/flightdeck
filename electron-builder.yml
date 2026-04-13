@@ -1,0 +1,22 @@
+appId: com.flight-deck.app
+productName: flight deck
+copyright: Copyright © 2025
+
+directories:
+  output: dist
+
+# out/mobile/ must be unpacked from the asar archive because Hono's static
+# file serving uses fs.readFile, which cannot read files inside an asar.
+# getMobileRoot() in src/main/http/static.ts points to the unpacked path.
+asarUnpack:
+  - "out/mobile/**"
+
+mac:
+  target: dmg
+  category: public.app-category.developer-tools
+
+linux:
+  target: AppImage
+
+win:
+  target: nsis

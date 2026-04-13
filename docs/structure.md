@@ -1,7 +1,7 @@
 # flight deck — Structure & Build Phases
 
 > Status: Approved.
-> Last updated: 2026-04-06
+> Last updated: 2026-04-11
 
 ---
 
@@ -178,6 +178,41 @@ select between them in the `⌘K` dispatch overlay.
 - Session card appears on dashboard
 - App quit kills all managed processes
 - `npm run typecheck` clean
+
+---
+
+## Phase 3 (new roadmap) — HTTP Server + Mobile Client
+
+**Ticket:** `td-f3881d`
+**Depends on:** Phase 1 Claude Code dispatch complete (`td-8b02fa`)
+
+**Goal:** Access and control sessions from a mobile device over Tailscale.
+
+**Shipped:**
+- `AppConfig.http` — `{ enabled, bindAddress, port, token }`. Token auto-generated (UUID) at first run, stored plaintext in config.json (local-network secret, file perms 0600). Validated in `validatePatch`.
+- `src/main/http/server.ts` — Hono app factory. Auth middleware: `Authorization: Bearer <token>` header (mutations) or `fd_token` cookie (SSE + reads). Rate limiter: 10 failures → 60s block per IP. `timingSafeEqual` via sha256 hash. `GET /pair?token=t` sets HttpOnly cookie, 302 to `/`. `GET /api/snapshot`, `GET /api/events` (SSE, cleans up listener on disconnect), `POST /api/dispatch`, `POST /api/session/:id/respond`, `POST /api/session/:id/abort`. `GET /*` serves mobile SPA with SPA fallback.
+- `src/main/http/index.ts` — `HttpServer` class (start/stop/restart, emits listening/error/stopped).
+- `src/main/http/static.ts` — `getMobileRoot()`: dev uses `out/mobile/`, packaged uses `resources/app.asar.unpacked/out/mobile/`.
+- `src/main/index.ts` wired: start if enabled, restart on config change, stop in before-quit. Status events broadcast via `http:status` IPC.
+- `mobile/` — standalone Vite+React+TypeScript SPA (35 modules, ~204 kB gzip 64 kB). Views: Dashboard (attention-first session list), SessionDetail (approve/reject/abort), Dispatch (stub — no `/api/profiles` yet). SSE subscription via `EventSource`. Bearer token in `sessionStorage`. Dark theme.
+- `electron-builder.yml` — `asarUnpack: ["out/mobile/**"]` so Hono can `fs.readFile` static assets in packaged builds.
+- Settings: "Remote Access" section — enable toggle, bind address, port, QR code canvas (`qrcode.toCanvas`), copy URL button, regenerate token, live `http:status` indicator.
+
+**Deps added:** `hono`, `@hono/node-server`, `qrcode`, `@types/qrcode`.
+
+**CSRF / security:** Mutating HTTP routes require Bearer header, not cookie. SSE uses cookie (EventSource cannot set headers). CORS explicitly absent (same-origin). No `apiKey` exposed over HTTP — dispatch accepts `profileId` only.
+
+**Scope boundaries:**
+- `/api/profiles` endpoint deferred to Phase 4 (needed for full dispatch from mobile)
+- No HTTPS / self-signed cert — Tailscale handles transport security
+- No service worker / PWA manifest — service workers require HTTPS on LAN
+
+**Validation:**
+- `npm run build` + `npm run build:mobile` clean
+- `npm run typecheck` clean
+- Enable in Settings → QR appears, http:status shows "Listening"
+- Open pairing URL on mobile → cookie set, dashboard loads, sessions update via SSE
+- Approve/abort a session from mobile → main process receives the request
 
 ---
 

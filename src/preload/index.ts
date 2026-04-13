@@ -84,5 +84,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       directory: string
       prompt: string
     }): Promise<{ sessionId: string }> => ipcRenderer.invoke('instance:dispatch', args)
+  },
+  http: {
+    onStatus: (cb: (status: { status: string; host?: string; port?: number; message?: string }) => void): (() => void) => {
+      const handler = (_e: IpcRendererEvent, payload: { status: string; host?: string; port?: number; message?: string }): void => cb(payload)
+      ipcRenderer.on('http:status', handler)
+      return () => ipcRenderer.removeListener('http:status', handler)
+    }
   }
 })

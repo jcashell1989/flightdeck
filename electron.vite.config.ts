@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 // @opencode-ai/sdk, eventsource, and chokidar are ESM-only. Electron main is
 // CJS-output by default, so we bundle these inline instead of externalizing
 // them — avoids runtime require(ESM) fragility.
-const BUNDLED_MAIN_DEPS = ['@opencode-ai/sdk', 'eventsource', 'chokidar']
+const BUNDLED_MAIN_DEPS = ['@opencode-ai/sdk', 'eventsource', 'chokidar', 'hono', '@hono/node-server']
 
 export default defineConfig({
   main: {

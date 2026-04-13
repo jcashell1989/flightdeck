@@ -2,6 +2,7 @@ import { app, safeStorage } from 'electron'
 import { promises as fs } from 'fs'
 import { join, dirname } from 'path'
 import { EventEmitter } from 'events'
+import { randomUUID } from 'crypto'
 import type {
   AgentProfile,
   AppConfig,
@@ -27,6 +28,7 @@ interface PersistedProfile extends Omit<AgentProfile, 'apiKey'> {
 interface PersistedConfig {
   opencode: AppConfig['opencode']
   mock: AppConfig['mock']
+  http: AppConfig['http']
   projects: AppConfig['projects']
   profiles: PersistedProfile[]
 }
@@ -34,6 +36,7 @@ interface PersistedConfig {
 const DEFAULT_CONFIG: AppConfig = {
   opencode: { instances: [{ host: '127.0.0.1', port: 4096, label: 'local' }] },
   mock: { enabled: true },
+  http: { enabled: false, bindAddress: '0.0.0.0', port: 4097, token: '' },
   projects: [],
   profiles: []
 }
@@ -130,6 +133,7 @@ export function toPersisted(
   return {
     opencode: cfg.opencode,
     mock: cfg.mock,
+    http: cfg.http,
     projects: cfg.projects,
     profiles
   }
@@ -206,6 +210,7 @@ export function fromPersisted(
   return {
     opencode: persisted.opencode,
     mock: persisted.mock,
+    http: persisted.http ?? DEFAULT_CONFIG.http,
     projects: persisted.projects,
     profiles
   }
@@ -286,6 +291,16 @@ export function validatePatch(patch: unknown): Partial<AppConfig> {
     }
   }
 
+  if ('http' in p) {
+    const h = p['http']
+    if (typeof h !== 'object' || h === null) throw new Error('invalid config patch: http must be an object')
+    const hObj = h as Record<string, unknown>
+    if ('enabled' in hObj && typeof hObj['enabled'] !== 'boolean') throw new Error('invalid config patch: http.enabled must be a boolean')
+    if ('port' in hObj && typeof hObj['port'] !== 'number') throw new Error('invalid config patch: http.port must be a number')
+    if ('bindAddress' in hObj && typeof hObj['bindAddress'] !== 'string') throw new Error('invalid config patch: http.bindAddress must be a string')
+    if ('token' in hObj && typeof hObj['token'] !== 'string') throw new Error('invalid config patch: http.token must be a string')
+  }
+
   if ('profiles' in p) {
     if (!Array.isArray(p['profiles'])) {
       throw new Error('invalid config patch: profiles must be an array')
@@ -355,9 +370,13 @@ class ConfigStore extends EventEmitter {
     } catch (e) {
       const code = (e as NodeJS.ErrnoException)?.code
       if (code === 'ENOENT') {
-        // First run: create defaults.
-        await this.writePersisted(toPersisted(DEFAULT_CONFIG, electronCrypto, this.shadowEncrypted))
-        this.config = DEFAULT_CONFIG
+        // First run: create defaults with a generated token.
+        const firstRunConfig: AppConfig = {
+          ...DEFAULT_CONFIG,
+          http: { ...DEFAULT_CONFIG.http, token: randomUUID() }
+        }
+        await this.writePersisted(toPersisted(firstRunConfig, electronCrypto, this.shadowEncrypted))
+        this.config = firstRunConfig
         this.loaded = true
         return this.config
       }
@@ -399,6 +418,10 @@ class ConfigStore extends EventEmitter {
     const decoded = fromPersisted(parsed, electronCrypto, this.shadowEncrypted)
     this.config = this.merge(DEFAULT_CONFIG, decoded)
     this.loaded = true
+    if (!this.config.http.token) {
+      this.config.http.token = randomUUID()
+      await this.writePersisted(toPersisted(this.config, electronCrypto, this.shadowEncrypted))
+    }
     return this.config
   }
 
@@ -424,6 +447,7 @@ class ConfigStore extends EventEmitter {
     return {
       opencode: patch.opencode ?? base.opencode,
       mock: patch.mock ?? base.mock,
+      http: patch.http ?? base.http,
       projects: patch.projects ?? base.projects,
       profiles: patch.profiles ?? base.profiles
     }
@@ -434,6 +458,9 @@ class ConfigStore extends EventEmitter {
     const tmp = this.path + '.tmp'
     await fs.writeFile(tmp, JSON.stringify(cfg, null, 2), 'utf8')
     await fs.rename(tmp, this.path)
+    if (process.platform !== 'win32') {
+      try { await fs.chmod(this.path, 0o600) } catch { /* non-fatal */ }
+    }
   }
 }
 
