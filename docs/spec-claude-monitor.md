@@ -1,4 +1,4 @@
-# agentctl — Claude Code Passive Monitor Design
+# flight deck — Claude Code Passive Monitor Design
 
 > Status: Design complete. Awaiting approval.
 > Ticket: td-4a41eb
