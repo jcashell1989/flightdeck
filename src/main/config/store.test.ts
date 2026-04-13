@@ -29,6 +29,7 @@ function baseConfig(profiles: AgentProfile[] = []): AppConfig {
   return {
     opencode: { instances: [{ host: '127.0.0.1', port: 4096 }] },
     mock: { enabled: true },
+    http: { enabled: false, bindAddress: '0.0.0.0', port: 4097, token: '' },
     projects: [],
     profiles
   }
@@ -358,6 +359,7 @@ describe('toPersisted / fromPersisted', () => {
     const legacy = {
       opencode: { instances: [{ host: '127.0.0.1', port: 4096 }] },
       mock: { enabled: true },
+      http: { enabled: false, bindAddress: '0.0.0.0', port: 4097, token: '' },
       projects: [],
       profiles: [
         {
@@ -389,6 +391,7 @@ describe('toPersisted / fromPersisted', () => {
     const legacy = {
       opencode: { instances: [{ host: '127.0.0.1', port: 4096 }] },
       mock: { enabled: true },
+      http: { enabled: false, bindAddress: '0.0.0.0', port: 4097, token: '' },
       projects: [],
       profiles: [
         {
