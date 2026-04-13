@@ -17,6 +17,8 @@ import * as ipcOpencode from './ipc/opencode'
 import * as ipcProject from './ipc/project'
 import * as ipcProfile from './ipc/profile'
 import * as ipcInstance from './ipc/instance'
+import * as ipcAnalytics from './ipc/analytics'
+import { analyticsMonitor } from './analytics/monitor'
 
 // Main is bundled as ESM (electron.vite.config.ts: format 'es'), so __dirname
 // is not defined. Resolve it from import.meta.url instead.
@@ -41,6 +43,7 @@ function registerIpc(claudeLauncher: ClaudeLauncher): void {
   ipcProject.register()
   ipcProfile.register()
   ipcInstance.register(claudeLauncher)
+  ipcAnalytics.register(broadcast)
 }
 
 function createWindow(): void {
@@ -132,6 +135,7 @@ app.whenReady().then(async () => {
   opencodeRegistry.setOpencodeFileWatch(opencodeFileWatchMonitor)
   opencodeRegistry.start()
   claudeMonitor.start()
+  analyticsMonitor.start()
   opencodeFileWatchMonitor.start()
 
   // ── HTTP server (Slice 3.2 / 3.4) ────────────────────────────────────────
@@ -238,6 +242,7 @@ app.on('before-quit', (event) => {
     try {
       opencodeRegistry.dispose()
       claudeMonitor.dispose()
+      analyticsMonitor.dispose()
       opencodeFileWatchMonitor.dispose()
       await Promise.all([
         opencodeLauncher.stopAllAsync(),
