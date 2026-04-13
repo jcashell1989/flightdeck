@@ -1,5 +1,6 @@
 import type {
   AgentProfile,
+  AnalyticsSummary,
   AppConfig,
   CommandDefinition,
   GitStatusResult,
@@ -69,6 +70,10 @@ export interface ElectronAPI {
   }
   http: {
     onStatus: (cb: (status: { status: string; host?: string; port?: number; message?: string }) => void) => () => void
+  }
+  analytics: {
+    getSummary: () => Promise<AnalyticsSummary>
+    onSummary: (cb: (summary: AnalyticsSummary) => void) => () => void
   }
 }
 
