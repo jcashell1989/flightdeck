@@ -163,9 +163,12 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
     this.removeAllListeners()
   }
 
-  /** Mark as disposed, clear all tracked instances, and remove all listeners. */
+  /** Mark as disposed, kill all tracked instances, and remove all listeners. */
   dispose(): void {
     this.disposed = true
+    for (const entry of this.instances.values()) {
+      void killChild(entry.process)
+    }
     this.instances.clear()
     this.removeAllListeners()
   }
@@ -273,7 +276,11 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
             settled = true
             clearTimeout(timer)
 
-            const pid = child.pid!
+            const pid = child.pid
+            if (pid === undefined) {
+              fail(new Error('child process has no pid — spawn may have failed silently'))
+              return
+            }
             const key = instanceKey(profile.id, directory)
             const entry: ManagedEntry = {
               process: child,
@@ -295,6 +302,8 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
 
             this.emit('started', { sessionId, directory, profileId: profile.id, pid })
             resolve({ sessionId, pid })
+            child.stdout?.removeAllListeners('data')
+            buffer = ''
           }
         }
       })

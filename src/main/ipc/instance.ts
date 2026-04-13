@@ -2,13 +2,14 @@ import { configStore } from '../config/store'
 import { opencodeRegistry } from '../opencode/registry'
 import { opencodeLauncher } from '../opencode/launcher'
 import { safeHandle } from './_helpers'
-import { waitForClientConnected } from '../util/shell'
+import { waitForClientConnected, validPath } from '../util/shell'
 import type { ClaudeLauncher } from '../claude/launcher'
 
 export function register(claudeLauncher: ClaudeLauncher): void {
   safeHandle(
     'instance:dispatch',
     async (_e, args: { profileId: string; directory: string; prompt: string }) => {
+      if (!validPath(args.directory)) throw new Error(`invalid directory: ${args.directory}`)
       const cfg = configStore.get()
       const profile = cfg.profiles.find((p) => p.id === args.profileId)
       if (!profile) throw new Error(`profile ${args.profileId} not found`)
