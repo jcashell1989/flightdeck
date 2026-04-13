@@ -95,7 +95,7 @@ export interface PendingPermission {
 
 export interface Session {
   id: string
-  agentType: 'opencode' | 'claude-code'
+  agentType: 'opencode' | 'claude-code' | 'codex'
   state: SessionState
   currentAction: string
   startedAt: number
@@ -176,6 +176,24 @@ export interface CommandDefinition {
   description: string
   source: string
   template?: string
+}
+
+// ── Codex types ───────────────────────────────────────────────────────────
+
+export type CodexSessionState = 'running' | 'idle'
+
+export interface CodexSession {
+  id: string
+  title: string
+  cwd: string
+  model: string
+  state: CodexSessionState
+  startedAt: number
+  lastActivity: number
+}
+
+export interface CodexSnapshot {
+  sessions: CodexSession[]
 }
 
 // ── Analytics types ───────────────────────────────────────────────────────

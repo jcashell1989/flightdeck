@@ -24,8 +24,8 @@ export interface PendingPermission {
 
 export interface NormalizedSession {
   id: string
-  /** 'opencode' for opencode sessions; 'claude-code' for Claude Code monitor sessions */
-  agentType: 'opencode' | 'claude-code'
+  /** 'opencode' for opencode sessions; 'claude-code' for Claude Code; 'codex' for Codex CLI */
+  agentType: 'opencode' | 'claude-code' | 'codex'
   state: NormalizedSessionState
   currentAction: string
   startedAt: number
