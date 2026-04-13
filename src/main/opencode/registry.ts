@@ -15,6 +15,8 @@ import type { NormalizedProject, InstanceSnapshot, InstanceConnectionStatus } fr
 import type { ClaudeMonitor } from '../claude/monitor'
 import type { ClaudeProject } from '../claude/types'
 import type { OpencodeFileWatchMonitor } from '../adapters/file-watch'
+import type { CodexMonitor } from '../codex/monitor'
+import type { CodexSession } from '../codex/types'
 
 function keyOf(inst: OpencodeInstance): string {
   return `${inst.host}:${inst.port}`
@@ -34,6 +36,9 @@ export class OpencodeRegistry extends EventEmitter {
   private _claudeSnapCache: ReturnType<ClaudeMonitor['getSnapshot']> | null = null
   private _claudeSnapDirty = true
   private opencodeFileWatch: OpencodeFileWatchMonitor | null = null
+  private codexMonitor: CodexMonitor | null = null
+  private _codexSnapCache: ReturnType<CodexMonitor['getSnapshot']> | null = null
+  private _codexSnapDirty = true
   /**
    * Serialises sync() calls. Rapid back-to-back config changes (e.g. the
    * user mashing "save" in Settings) used to race and leak clients because
@@ -56,6 +61,15 @@ export class OpencodeRegistry extends EventEmitter {
   setOpencodeFileWatch(monitor: OpencodeFileWatchMonitor): void {
     this.opencodeFileWatch = monitor
     monitor.on('change', () => this.emit('change'))
+  }
+
+  /** Wire in the Codex CLI monitor (Phase 6). Call before start(). */
+  setCodexMonitor(monitor: CodexMonitor): void {
+    this.codexMonitor = monitor
+    monitor.on('change', () => {
+      this._codexSnapDirty = true
+      this.emit('change')
+    })
   }
 
   start(): void {
@@ -165,6 +179,15 @@ export class OpencodeRegistry extends EventEmitter {
       }
     }
 
+    // Merge Codex CLI sessions (Phase 6).
+    if (this.codexMonitor) {
+      if (this._codexSnapDirty || !this._codexSnapCache) {
+        this._codexSnapCache = this.codexMonitor.getSnapshot()
+        this._codexSnapDirty = false
+      }
+      this.mergeCodexSessions(projects, this._codexSnapCache.sessions)
+    }
+
     return {
       projects,
       aggregateStatus: {
@@ -205,6 +228,40 @@ export class OpencodeRegistry extends EventEmitter {
         path: claudeProject.path,
         sessions: claudeSessions
       })
+    }
+  }
+
+  private mergeCodexSessions(
+    projects: NormalizedProject[],
+    sessions: CodexSession[]
+  ): void {
+    const byPath = new Map<string, CodexSession[]>()
+    for (const s of sessions) {
+      const list = byPath.get(s.cwd) ?? []
+      list.push(s)
+      byPath.set(s.cwd, list)
+    }
+
+    for (const [cwd, cwdSessions] of byPath) {
+      const normalized = cwdSessions.map((s) => ({
+        id: s.id,
+        agentType: 'codex' as const,
+        state: s.state as 'running' | 'idle',
+        currentAction: s.state === 'running' ? '⚙ running…' : '◌ idle',
+        startedAt: s.startedAt,
+        lastActivity: s.lastActivity,
+        projectId: cwd,
+        instanceKey: `codex:${s.id}`,
+        pendingPermission: null
+      }))
+
+      const existing = projects.find((p) => p.path === cwd)
+      if (existing) {
+        existing.sessions.push(...normalized)
+      } else {
+        const name = cwd.split('/').filter(Boolean).pop() ?? cwd
+        projects.push({ id: cwd, name, path: cwd, sessions: normalized })
+      }
     }
   }
 
