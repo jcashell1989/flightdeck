@@ -1,8 +1,9 @@
 import { EventEmitter } from 'events'
 import chokidar, { FSWatcher } from 'chokidar'
 import fs from 'fs/promises'
-import { join, basename, dirname } from 'path'
+import { join } from 'path'
 import { homedir } from 'os'
+import { decodeProjectPath } from '../claude/parser'
 import type { ClaudeCodeSessionUsage } from './types'
 
 interface FinalizedEntry {
@@ -204,8 +205,11 @@ export class ClaudeCodeAnalyticsCollector extends EventEmitter {
 
     const encodedProject = parts[projectsIdx + 1] ?? ''
     const sessionId = parts[projectsIdx + 2] ?? ''
-    // encodedPath: replace '-' with '/'
-    const projectPath = '/' + encodedProject.replace(/-/g, '/')
+    // Claude CLI encodes: leading '/' → '-', remaining '/' → '-'.
+    // Disk directory names therefore start with '-'. decodeProjectPath()
+    // expects the form WITHOUT the leading '-' (it prepends '/').
+    const stripped = encodedProject.startsWith('-') ? encodedProject.slice(1) : encodedProject
+    const projectPath = decodeProjectPath(stripped)
 
     return { sessionId, projectPath }
   }
