@@ -11,6 +11,7 @@ import type {
   ProjectConfig,
   ProjectValidationResult
 } from '../shared/types'
+import type { CodexSnapshot } from '../shared/types'
 
 contextBridge.exposeInMainWorld('electronAPI', {
   getTheme: (): Promise<'dark' | 'light'> => ipcRenderer.invoke('get-theme'),
@@ -100,6 +101,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const handler = (_e: IpcRendererEvent, s: AnalyticsSummary): void => cb(s)
       ipcRenderer.on('analytics:summary', handler)
       return () => ipcRenderer.removeListener('analytics:summary', handler)
+    }
+  },
+  codex: {
+    getSnapshot: (): Promise<CodexSnapshot> => ipcRenderer.invoke('codex:snapshot'),
+    onSnapshot: (cb: (snap: CodexSnapshot) => void): (() => void) => {
+      const handler = (_e: IpcRendererEvent, snap: CodexSnapshot): void => cb(snap)
+      ipcRenderer.on('codex:snapshot', handler)
+      return () => ipcRenderer.removeListener('codex:snapshot', handler)
     }
   }
 })

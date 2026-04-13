@@ -19,6 +19,8 @@ import * as ipcProfile from './ipc/profile'
 import * as ipcInstance from './ipc/instance'
 import * as ipcAnalytics from './ipc/analytics'
 import { analyticsMonitor } from './analytics/monitor'
+import * as ipcCodex from './ipc/codex'
+import { codexMonitor } from './codex/monitor'
 
 // Main is bundled as ESM (electron.vite.config.ts: format 'es'), so __dirname
 // is not defined. Resolve it from import.meta.url instead.
@@ -44,6 +46,7 @@ function registerIpc(claudeLauncher: ClaudeLauncher): void {
   ipcProfile.register()
   ipcInstance.register(claudeLauncher)
   ipcAnalytics.register(broadcast)
+  ipcCodex.register(broadcast)
 }
 
 function createWindow(): void {
@@ -133,10 +136,12 @@ app.whenReady().then(async () => {
   // Wire monitors into the registry before starting any of them.
   opencodeRegistry.setClaudeMonitor(claudeMonitor)
   opencodeRegistry.setOpencodeFileWatch(opencodeFileWatchMonitor)
+  opencodeRegistry.setCodexMonitor(codexMonitor)
   opencodeRegistry.start()
   claudeMonitor.start()
   analyticsMonitor.start()
   opencodeFileWatchMonitor.start()
+  codexMonitor.start()
 
   // ── HTTP server (Slice 3.2 / 3.4) ────────────────────────────────────────
   const hs = new HttpServer({
@@ -245,6 +250,7 @@ app.on('before-quit', (event) => {
       claudeMonitor.dispose()
       analyticsMonitor.dispose()
       opencodeFileWatchMonitor.dispose()
+      codexMonitor.dispose()
       await Promise.all([
         opencodeLauncher.stopAllAsync(),
         claudeLauncher?.stopAllAsync() ?? Promise.resolve(),

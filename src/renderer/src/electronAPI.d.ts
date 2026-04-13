@@ -2,6 +2,7 @@ import type {
   AgentProfile,
   AnalyticsSummary,
   AppConfig,
+  CodexSnapshot,
   CommandDefinition,
   GitStatusResult,
   MessageRecord,
@@ -74,6 +75,10 @@ export interface ElectronAPI {
   analytics: {
     getSummary: () => Promise<AnalyticsSummary>
     onSummary: (cb: (summary: AnalyticsSummary) => void) => () => void
+  }
+  codex: {
+    getSnapshot: () => Promise<CodexSnapshot>
+    onSnapshot: (cb: (snap: CodexSnapshot) => void) => () => void
   }
 }
 
