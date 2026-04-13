@@ -11,6 +11,7 @@ import { CmdKDispatch } from './components/CmdKDispatch'
 import { Dashboard } from './views/Dashboard'
 import { Sessions } from './views/Sessions'
 import { Projects } from './views/Projects'
+import { Analytics } from './views/Analytics'
 import { Settings } from './views/Settings'
 
 export function App() {
@@ -208,6 +209,7 @@ export function App() {
               />
             )}
             {activeView === 'projects' && <Projects projects={projects} config={config} />}
+            {activeView === 'analytics' && <Analytics />}
             {activeView === 'settings' && <Settings config={config} setConfig={setConfig} />}
           </div>
         )}
