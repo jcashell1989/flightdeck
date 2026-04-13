@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 import type {
   AgentProfile,
+  AnalyticsSummary,
   AppConfig,
   CommandDefinition,
   GitStatusResult,
@@ -91,6 +92,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const handler = (_e: IpcRendererEvent, payload: { status: string; host?: string; port?: number; message?: string }): void => cb(payload)
       ipcRenderer.on('http:status', handler)
       return () => ipcRenderer.removeListener('http:status', handler)
+    }
+  },
+  analytics: {
+    getSummary: (): Promise<AnalyticsSummary> => ipcRenderer.invoke('analytics:summary'),
+    onSummary: (cb: (summary: AnalyticsSummary) => void): (() => void) => {
+      const handler = (_e: IpcRendererEvent, s: AnalyticsSummary): void => cb(s)
+      ipcRenderer.on('analytics:summary', handler)
+      return () => ipcRenderer.removeListener('analytics:summary', handler)
     }
   }
 })

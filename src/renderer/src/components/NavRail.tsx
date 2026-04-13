@@ -9,7 +9,8 @@ const NAV_ITEMS: { view: View; icon: string; label: string; key: string }[] = [
   { view: 'dashboard', icon: '⊞', label: 'Dashboard', key: '1' },
   { view: 'sessions', icon: '⊟', label: 'Sessions', key: '2' },
   { view: 'projects', icon: '⊕', label: 'Projects', key: '3' },
-  { view: 'settings', icon: '⚙', label: 'Settings', key: '4' }
+  { view: 'analytics', icon: '◈', label: 'Analytics', key: '4' },
+  { view: 'settings', icon: '⚙', label: 'Settings', key: '5' }
 ]
 
 export function NavRail({ activeView, onViewChange }: NavRailProps) {

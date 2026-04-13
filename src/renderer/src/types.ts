@@ -11,17 +11,21 @@
 export type {
   AgentProfile,
   AggregateStatus,
+  AnalyticsSummary,
   AppConfig,
+  ClaudeCodeSessionUsage,
   CommandDefinition,
   ConnectionStatus,
   GitStatusResult,
   MessageRecord,
   OpencodeInstance,
+  OpencodeSessionCost,
   OpencodeSnapshotPayload,
   PendingPermission,
   PerInstanceStatus,
   ProcessResult,
   Project,
+  ProjectAnalytics,
   ProjectConfig,
   ProjectValidationResult,
   Session,
@@ -30,7 +34,7 @@ export type {
 
 import type { SessionState } from '../../shared/types'
 
-export type View = 'dashboard' | 'sessions' | 'projects' | 'settings'
+export type View = 'dashboard' | 'sessions' | 'projects' | 'analytics' | 'settings'
 
 // Attention states: anything that wants the user's eyes.
 // `idle` is here because an idle agent with no reason to be idle is a problem.

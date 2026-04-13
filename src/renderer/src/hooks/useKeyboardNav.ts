@@ -20,7 +20,8 @@ const VIEW_KEYS: Record<string, View> = {
   '1': 'dashboard',
   '2': 'sessions',
   '3': 'projects',
-  '4': 'settings'
+  '4': 'analytics',
+  '5': 'settings'
 }
 
 export function useKeyboardNav(opts: UseKeyboardNavOptions): void {
