@@ -9,6 +9,7 @@ import { opencodeRegistry } from './opencode/registry'
 import { claudeMonitor } from './claude/monitor'
 import { opencodeFileWatchMonitor } from './adapters/file-watch'
 import { opencodeLauncher } from './opencode/launcher'
+import { ClaudeLauncher } from './claude/launcher'
 import * as ipcConfig from './ipc/config'
 import * as ipcOpencode from './ipc/opencode'
 import * as ipcProject from './ipc/project'
@@ -32,12 +33,12 @@ function broadcast(channel: string, payload: unknown): void {
  * tripping "Attempted to register a second handler for 'X'". Each register()
  * internally uses safeHandle() which calls removeHandler first.
  */
-function registerIpc(): void {
+function registerIpc(claudeLauncher: ClaudeLauncher): void {
   ipcConfig.register(broadcast)
   ipcOpencode.register(broadcast)
   ipcProject.register()
   ipcProfile.register()
-  ipcInstance.register()
+  ipcInstance.register(claudeLauncher)
 }
 
 function createWindow(): void {
@@ -115,9 +116,15 @@ migrateUserData()
 app.whenReady().then(async () => {
   // Config must be loaded before any IPC handler can read it.
   await configStore.init()
+  claudeLauncher = await ClaudeLauncher.create()
+  const launcher = claudeLauncher
   // Register IPC AFTER init so handlers never hit an un-initialised store,
   // and so the renderer's config:get cannot race the load.
-  registerIpc()
+  registerIpc(launcher)
+  // Wire dispatched sessions into the monitor for immediate JSONL watch.
+  launcher.on('started', ({ pid, sessionId, directory }: { pid: number; sessionId: string; directory: string }) => {
+    claudeMonitor.trackLaunchedSession({ pid, sessionId, cwd: directory, startedAt: Date.now() })
+  })
   // Wire monitors into the registry before starting any of them.
   opencodeRegistry.setClaudeMonitor(claudeMonitor)
   opencodeRegistry.setOpencodeFileWatch(opencodeFileWatchMonitor)
@@ -140,6 +147,7 @@ app.on('window-all-closed', () => {
  * SIGTERM'd children have a chance to exit, leaving them as zombies owned
  * by init.
  */
+let claudeLauncher: import('./claude/launcher').ClaudeLauncher | null = null
 let shuttingDown = false
 app.on('before-quit', (event) => {
   if (shuttingDown) return
@@ -150,7 +158,7 @@ app.on('before-quit', (event) => {
       opencodeRegistry.dispose()
       claudeMonitor.dispose()
       opencodeFileWatchMonitor.dispose()
-      await opencodeLauncher.stopAllAsync()
+      await Promise.all([opencodeLauncher.stopAllAsync(), claudeLauncher?.stopAllAsync() ?? Promise.resolve()])
     } catch (e) {
       console.error('[main] error during shutdown:', e)
     } finally {

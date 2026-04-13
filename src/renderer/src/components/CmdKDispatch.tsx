@@ -69,33 +69,21 @@ export function CmdKDispatch({
     const api = window.electronAPI?.profile
     if (!api) return
     void api.list().then((all) => {
-      const opencode = all.filter((p) => p.agentType === 'opencode')
-      setProfiles(opencode)
+      setProfiles(all)
       // Pre-select the default profile, or the first one.
-      const def = opencode.find((p) => p.isDefault) ?? opencode[0]
+      const def = all.find((p) => p.isDefault) ?? all[0]
       if (def) setSelectedProfileId(def.id)
     })
   }, [])
 
-  // Only show projects that can receive opencode dispatches.
-  // A project is dispatchable if it has at least one opencode session, or no
-  // sessions at all (new project). Claude Code-only projects are monitor-only.
-  const dispatchableProjects = useMemo(
-    () =>
-      projects.filter(
-        (p) =>
-          p.sessions.length === 0 ||
-          p.sessions.some((s) => s.agentType === 'opencode')
-      ),
-    [projects]
-  )
+  const dispatchableProjects = projects
 
   const target = useMemo(
     () =>
       dispatchableProjects.find((p) => p.path === targetPath) ??
       dispatchableProjects[0] ??
       null,
-    [targetPath, dispatchableProjects]
+    [targetPath, projects]
   )
 
   // Default target + focus on open. Preset path (from "+ New Session") takes priority.
@@ -371,14 +359,6 @@ export function CmdKDispatch({
                 </option>
               ))}
           </select>
-          {projects.length > dispatchableProjects.length && (
-            <span
-              title="Claude Code sessions are monitor-only and cannot receive dispatches"
-              style={{ color: 'var(--fg-subtle)', fontSize: 10, cursor: 'help' }}
-            >
-              🔒 {projects.length - dispatchableProjects.length} monitor-only
-            </span>
-          )}
         </div>
 
         {error && (
