@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import { setCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
@@ -24,6 +25,7 @@ export interface HttpServerDeps {
   abort: (sessionId: string) => Promise<void>
   getToken: () => string
   getMobileRoot: () => string
+  getConfig: () => import('../../shared/types').AppConfig
 }
 
 function safeTokenCompare(a: string, b: string): boolean {
@@ -50,6 +52,13 @@ type Env = {
 
 export function createApp(deps: HttpServerDeps): Hono<Env> {
   const app = new Hono<Env>()
+
+  app.use('*', cors({
+    origin: (origin) => origin ?? '*',
+    credentials: true,
+    allowMethods: ['GET', 'POST'],
+    allowHeaders: ['Authorization', 'Content-Type'],
+  }))
 
   // ── Rate limiter ────────────────────────────────────────────────────────
   const rateLimiter = new Map<string, { failures: number; blockedUntil: number }>()
@@ -184,12 +193,24 @@ export function createApp(deps: HttpServerDeps): Hono<Env> {
     if (typeof b['profileId'] !== 'string' || typeof b['directory'] !== 'string' || typeof b['prompt'] !== 'string') {
       return c.json({ error: 'profileId, directory, and prompt are required strings' }, 400)
     }
-    const result = await deps.dispatch({
-      profileId: b['profileId'],
-      directory: b['directory'],
-      prompt: b['prompt'],
-    })
-    return c.json({ sessionId: result.sessionId })
+    const cfg = deps.getConfig()
+    const isValid = cfg.projects?.some(
+      (p: { path: string }) => b['directory'] === p.path || (b['directory'] as string).startsWith(p.path + '/')
+    )
+    if (!isValid) {
+      return c.json({ error: 'directory is not a registered project path' }, 400)
+    }
+    try {
+      const result = await deps.dispatch({
+        profileId: b['profileId'],
+        directory: b['directory'],
+        prompt: b['prompt'],
+      })
+      return c.json({ sessionId: result.sessionId })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'internal error'
+      return c.json({ error: msg }, 500)
+    }
   })
 
   // Session respond endpoint — bearer only
@@ -211,15 +232,25 @@ export function createApp(deps: HttpServerDeps): Hono<Env> {
       return c.json({ error: 'response must be once, always, or reject' }, 400)
     }
     const sessionId = c.req.param('id')
-    await deps.respond(sessionId, b['permissionId'], b['response'] as PermissionResponse)
-    return c.json({ ok: true })
+    try {
+      await deps.respond(sessionId, b['permissionId'], b['response'] as PermissionResponse)
+      return c.json({ ok: true })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'internal error'
+      return c.json({ error: msg }, 500)
+    }
   })
 
   // Session abort endpoint — bearer only
   app.post('/api/session/:id/abort', authMiddleware, bearerOnlyMiddleware, async (c) => {
     const sessionId = c.req.param('id')
-    await deps.abort(sessionId)
-    return c.json({ ok: true })
+    try {
+      await deps.abort(sessionId)
+      return c.json({ ok: true })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'internal error'
+      return c.json({ error: msg }, 500)
+    }
   })
 
   // Static file serving (mobile client)

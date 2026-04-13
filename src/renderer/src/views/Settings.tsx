@@ -93,7 +93,7 @@ function RemoteAccess({
   const cfg = config.http
 
   const pairingUrl =
-    cfg.bindAddress && cfg.port && cfg.token
+    cfg.enabled && cfg.bindAddress && cfg.port && cfg.token
       ? `http://${cfg.bindAddress}:${cfg.port}/pair?token=${cfg.token}`
       : ''
 

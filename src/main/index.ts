@@ -175,6 +175,7 @@ app.whenReady().then(async () => {
     },
     getToken: () => configStore.get().http.token,
     getMobileRoot,
+    getConfig: () => configStore.get(),
   })
   httpServer = hs
 
