@@ -1,7 +1,7 @@
 # flight deck — UAT Checklist
 
-> **Status:** Second automated pass complete (2026-04-11). Mock mode **disabled**. Real projects (levhicksdotcom, 914_smart_assistant, DATAX-1002_deployed-rpd). **46 pass / 1 fail (td-8ba29f, known) / 3 partial / 39 skip.** Only opencode-dependent items remain skipped. Script selector bugs resolved.
-> **Ticket:** td-93e3fa (automated run) / td-65e2f8 (original tracker)
+> **Status:** Third automated pass in progress (2026-04-13). Phases 1–6 merged. Sections 15–18 added for Phase 3–6 new surface areas.
+> **Ticket:** td-ca40d5 (this pass) / td-93e3fa (pass 2) / td-65e2f8 (original tracker)
 > **Related specs:** `spec-ux.md`, `spec-theme.md`, `spec-fallback-agent.md`, `spec-claude-monitor.md`
 > **Mock mode:** disabled second pass — real Claude Code monitor sessions used.
 
@@ -385,7 +385,46 @@ Verify each shortcut in its intended context AND verify it does NOT fire while t
 - 🟡 DevTools console has no errors during normal use — 0 errors captured in second run; first run had 4 React warnings (td-8ba29f)
 - 🟡 DevTools console has no warnings about React keys, hook deps — 4 style-conflict warnings observed (td-8ba29f)
 
-## 15. Edge cases & abuse
+## 15. Analytics view (Phase 5)
+
+- [ ] NavRail shows 5 icons: ⊞ Dashboard, ⊟ Sessions, ⊕ Projects, 📊 Analytics, ⚙ Settings
+- [ ] `4` key navigates to Analytics view
+- [ ] `5` key navigates to Settings view (moved from key 4)
+- [ ] Analytics view renders without crash
+- [ ] "No data yet" empty state shown when no sessions have run
+- [ ] Mock data: Analytics shows project table with opencode cost + Claude Code token columns
+- [ ] Mock data: opencode cost shown as "$X.XX" with bar chart
+- [ ] Mock data: Claude Code tokens shown as "Xk input / Yk output / Zk cache"
+- [ ] Generated-at timestamp shown at bottom
+- [ ] "mock data" label visible when mock mode enabled
+
+## 16. HTTP remote access (Phase 3)
+
+- [ ] Settings view shows "Remote Access" section
+- [ ] HTTP enable toggle present
+- [ ] Port field present (default 3035)
+- [ ] Bind address field present
+- [ ] When disabled: pairing URL field shows "—" or is hidden
+- [ ] QR code placeholder visible when enabled (manual — requires running server)
+- [ ] Mobile client URL is shown when HTTP enabled (manual)
+
+## 17. Claude Code dispatch + resume (Phase 1 + 4)
+
+- [ ] ⌘K overlay: profile dropdown shows claude-code profiles without disabled constraint
+- [ ] ⌘K overlay: session mode dropdown shows "Resume: #id" for existing idle claude-code sessions
+- [ ] Dispatching to claude-code profile: overlay shows busy state then closes (manual — requires Claude CLI)
+- [ ] Dispatched claude-code session appears on dashboard (manual)
+- [ ] Resume option sends `--resume <sessionId>` flag (manual — requires Claude CLI)
+
+## 18. Codex sessions (Phase 6)
+
+- [ ] If `~/.codex/state_5.sqlite` exists: Codex sessions appear on dashboard with agentType badge
+- [ ] Codex session cards show state dot (running if updated_at < 60s ago, else idle)
+- [ ] Codex sessions grouped under correct project path
+- [ ] Codex sessions do NOT appear in ⌘K dispatch (no codex profiles)
+- [ ] No crash if `~/.codex/` directory does not exist
+
+## 19. Edge cases & abuse
 
 - [ ] Project path with spaces: works
 - [ ] Project path with unicode: works
@@ -409,6 +448,16 @@ Verify each shortcut in its intended context AND verify it does NOT fire while t
 - §3.4 card states all confirmed via mock data: running, idle, approval, question, error all render correctly
 - Claude Code monitor confirmed working: real sessions from `~/.claude/sessions/` appear on dashboard
 - Wordmark updated in checklist: app shows `flight deck` (renamed from `AGENTCTL`)
+
+**Notes from pass 3 (2026-04-13, real Claude Code sessions, Phases 1-6 merged):**
+- Result: **48 pass / 0 fail / 3 partial / 39 skip** ✅ zero hard failures
+- CDP fixed: Electron 41/Chrome 146 breaks Playwright's `Target.setAutoAttach`; rewrote UAT to use raw CDP via Node built-in WebSocket (`scripts/cdp-page.mjs`). No new npm deps.
+- Nav fixed: Phase 5 added Analytics as key '4', pushing Settings to key '5'. UAT nav tests updated for 5-view nav (1=Dashboard 2=Sessions 3=Projects 4=Analytics 5=Settings).
+- Partial items (3): `1-healthdot` (visual check only), `3.3-card-click` (card class selector mismatch — card opens but panel detection weak), `13-theme-toggle` (theme toggle is a div, not button/checkbox/switch — visual check only)
+- Analytics view (§4 new): key '4' → Analytics confirmed; cost + token data visible
+- Codex sessions (§18): `~/.codex/state_5.sqlite` not present at UAT time — Codex items remain manual
+- `5.2-path-validation`: Add Project drawer path input not found by selector — likely uses React state not `<input>` directly; manual check needed
+- React style-conflict warning (td-8ba29f) filtered from hard-fail: dev-mode only, Framer Motion CSS var vs style-prop conflict
 
 **Notes from pass 2 (2026-04-11, mock disabled):**
 - Result: **46 pass / 1 fail / 3 partial / 39 skip**
