@@ -65,8 +65,8 @@ interface ManagedEntry {
   directory: string
 }
 
-function instanceKey(profileId: string, directory: string): string {
-  return `${profileId}:${directory}`
+function instanceKey(profileId: string, directory: string, sessionId?: string): string {
+  return sessionId ? `${profileId}:${directory}:${sessionId}` : `${profileId}:${directory}`
 }
 
 export interface Launcher {
@@ -126,6 +126,13 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
   ): Promise<ClaudeLaunchResult> {
     if (this.disposed) throw new Error('ClaudeLauncher is disposed')
 
+    // Guard: reject if a process is already managing this sessionId
+    for (const entry of this.instances.values()) {
+      if (entry.sessionId === sessionId) {
+        throw new Error(`session ${sessionId} is already running — stop it before resuming`)
+      }
+    }
+
     const args = ['--resume', sessionId, ...this.buildArgs(prompt, profile)]
     return this.spawnAndWait(args, profile, directory)
   }
@@ -136,13 +143,14 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
    * map entry once the process has actually terminated.
    */
   stop(profileId: string, directory: string): void {
-    const key = instanceKey(profileId, directory)
-    const entry = this.instances.get(key)
-    if (!entry) return
-    try {
-      entry.process.kill('SIGTERM')
-    } catch {
-      // Process may already be gone.
+    for (const [, entry] of this.instances) {
+      if (entry.profileId === profileId && entry.directory === directory) {
+        try {
+          entry.process.kill('SIGTERM')
+        } catch {
+          // Process may already be gone.
+        }
+      }
     }
   }
 
@@ -274,7 +282,7 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
             clearTimeout(timer)
 
             const pid = child.pid!
-            const key = instanceKey(profile.id, directory)
+            const key = instanceKey(profile.id, directory, sessionId)
             const entry: ManagedEntry = {
               process: child,
               sessionId,

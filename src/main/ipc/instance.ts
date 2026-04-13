@@ -15,7 +15,11 @@ export function register(claudeLauncher: ClaudeLauncher): void {
 
       if (profile.agentType === 'claude-code') {
         if (args.sessionId) {
-          const result = await claudeLauncher.resume(args.sessionId, profile, args.directory, args.prompt)
+          const sid = args.sessionId.trim()
+          if (!/^[a-zA-Z0-9_-]+$/.test(sid)) {
+            throw new Error(`invalid sessionId format: ${args.sessionId}`)
+          }
+          const result = await claudeLauncher.resume(sid, profile, args.directory, args.prompt)
           return { sessionId: result.sessionId }
         }
         const result = await claudeLauncher.launch(profile, args.directory, args.prompt)
