@@ -55,6 +55,21 @@ function registerIpc(claudeLauncher: ClaudeLauncher): void {
   ipcTd.register(broadcast)
 }
 
+const THEME_BG: Record<string, string> = {
+  'dark':             '#1D1912',
+  'light':            '#F5F0E8',
+  'tokyo-night':      '#1a1b26',
+  'catppuccin-mocha': '#1e1e2e',
+  'nord':             '#2e3440',
+}
+
+function resolveThemeBg(theme: string): string {
+  if (theme === 'os') {
+    return nativeTheme.shouldUseDarkColors ? '#1D1912' : '#F5F0E8'
+  }
+  return THEME_BG[theme] ?? '#1D1912'
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1400,
@@ -63,7 +78,7 @@ function createWindow(): void {
     minHeight: 600,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 12 },
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1D1912' : '#F5F0E8',
+    backgroundColor: resolveThemeBg(configStore.get().theme),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
