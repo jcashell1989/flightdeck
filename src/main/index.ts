@@ -143,6 +143,18 @@ adapterRegistry.register(opencodeFileWatchAdapter)
 adapterRegistry.register(codexSqliteAdapter)
 
 app.whenReady().then(async () => {
+  // Set custom dock icon (macOS dev mode — packaged app uses build/icon.icns via electron-builder).
+  if (process.platform === 'darwin' && app.dock) {
+    try {
+      const { nativeImage } = await import('electron')
+      const iconPath = join(__dirname, '..', '..', 'build', 'icon.png')
+      const img = nativeImage.createFromPath(iconPath)
+      if (!img.isEmpty()) app.dock.setIcon(img)
+    } catch {
+      // Non-fatal: dock icon stays as default Electron logo in dev mode.
+    }
+  }
+
   // Config must be loaded before any IPC handler can read it.
   await configStore.init()
   try {
