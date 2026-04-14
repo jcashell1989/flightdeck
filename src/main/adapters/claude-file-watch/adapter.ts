@@ -17,6 +17,7 @@
  * their terminal instead.
  */
 import { EventEmitter } from 'events'
+import { readFile } from 'fs/promises'
 import { ClaudeMonitor } from './monitor'
 import type { ClaudeLauncher } from './launcher'
 import type { Adapter, AdapterSnapshot } from '../types'
@@ -125,6 +126,78 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
    */
   getSessionLog(sessionId: string): string[] {
     return this.sessionLogs.get(sessionId) ?? []
+  }
+
+  async fetchMessages(sessionId: string): Promise<Array<{ info: unknown; parts: unknown[] }>> {
+    const cwd = this.getCwd(sessionId) ?? ''
+    const jsonlPath = await this.monitor.findJsonlPath(sessionId, cwd)
+    if (!jsonlPath) return []
+
+    let raw: string
+    try {
+      raw = await readFile(jsonlPath, 'utf8')
+    } catch {
+      return []
+    }
+
+    const results: Array<{ info: unknown; parts: unknown[] }> = []
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      let entry: Record<string, unknown>
+      try {
+        entry = JSON.parse(trimmed) as Record<string, unknown>
+      } catch {
+        continue
+      }
+      const type = entry['type']
+      if (type !== 'user' && type !== 'assistant') continue
+
+      const msg = entry['message'] as Record<string, unknown> | undefined
+      if (!msg) continue
+
+      const role = (msg['role'] as string | undefined) ?? type
+      const id = (msg['id'] as string | undefined) ?? (entry['uuid'] as string | undefined)
+      const rawContent = msg['content']
+
+      // Normalise content to ContentBlock[]
+      let blocks: Array<Record<string, unknown>>
+      if (typeof rawContent === 'string') {
+        blocks = [{ type: 'text', text: rawContent }]
+      } else if (Array.isArray(rawContent)) {
+        blocks = rawContent as Array<Record<string, unknown>>
+      } else {
+        continue
+      }
+
+      const parts: unknown[] = []
+      for (const block of blocks) {
+        const btype = block['type'] as string | undefined
+        if (btype === 'text') {
+          const text = (block['text'] as string | undefined) ?? ''
+          if (text.trim()) parts.push({ type: 'text', text })
+        } else if (btype === 'tool_use') {
+          const name = (block['name'] as string | undefined) ?? 'tool'
+          const input = block['input']
+          parts.push({
+            type: 'tool',
+            tool: name,
+            state: {
+              status: 'complete',
+              output: input != null ? JSON.stringify(input, null, 2) : ''
+            }
+          })
+        } else if (btype === 'tool_result') {
+          // Skip tool_result blocks — they come in user messages and are noise.
+          continue
+        }
+      }
+
+      if (parts.length === 0) continue
+      results.push({ info: { role, id }, parts })
+    }
+
+    return results
   }
 
   // ── Private send implementation ────────────────────────────────────────────

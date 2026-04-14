@@ -329,7 +329,7 @@ export class ClaudeMonitor extends EventEmitter {
     }
   }
 
-  private async findJsonlPath(sessionId: string, cwd: string): Promise<string | null> {
+  async findJsonlPath(sessionId: string, cwd: string): Promise<string | null> {
     // Primary: look in the project directory for this cwd.
     const encoded = encodeProjectPath(cwd)
     const projectDir = join(PROJECTS_DIR, encoded)
