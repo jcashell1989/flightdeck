@@ -22,7 +22,7 @@ import { join } from 'path'
 import { homedir } from 'os'
 import { DatabaseSync } from 'node:sqlite'
 import { configStore } from '../../config/store'
-import type { NormalizedProject } from '../../opencode/types'
+import type { NormalizedProject } from '../opencode-http/types'
 
 // ── Storage path resolution ────────────────────────────────────────────────
 

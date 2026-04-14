@@ -210,10 +210,11 @@ function ConversationTab({
     setSendError(null)
     try {
       // Slash command routing: /cmd args → sendCommand; plain text → sendPrompt.
-      // Only for managed opencode sessions (claude-code and file-watch are read-only).
+      // Only for sessions that support commands (adapter stamps canCommand).
       const canDispatchCommands =
-        session.agentType === 'opencode' &&
-        !session.instanceKey?.startsWith('opencode-file-watch:')
+        session.canCommand ??
+        (session.agentType === 'opencode' &&
+          !session.instanceKey?.startsWith('opencode-file-watch:'))
       const parsed = canDispatchCommands ? parseSlashCommand(text) : null
       if (parsed) {
         await api.sendCommand(session.id, parsed.command, parsed.args)

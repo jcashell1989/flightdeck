@@ -103,6 +103,16 @@ export interface Session {
   projectId: string
   instanceKey?: string
   pendingPermission?: PendingPermission | null
+  /** Adapter that owns this session (stamped by AdapterRegistry). Optional during transition. */
+  adapterId?: string
+  /** Whether the session is managed (dispatchable) or watched (read-only). */
+  controlMode?: 'managed' | 'watched'
+  /** Whether the session accepts reply prompts. */
+  canReply?: boolean
+  /** Whether the session accepts slash commands. */
+  canCommand?: boolean
+  /** Whether the session can be aborted. */
+  canAbort?: boolean
 }
 
 export interface Project {

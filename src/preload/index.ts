@@ -30,36 +30,36 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
   opencode: {
-    getSnapshot: (): Promise<OpencodeSnapshotPayload> => ipcRenderer.invoke('opencode:snapshot'),
+    getSnapshot: (): Promise<OpencodeSnapshotPayload> => ipcRenderer.invoke('agent:snapshot'),
     onSnapshot: (cb: (snap: OpencodeSnapshotPayload) => void): (() => void) => {
       const handler = (_e: IpcRendererEvent, snap: OpencodeSnapshotPayload): void => cb(snap)
-      ipcRenderer.on('opencode:snapshot', handler)
-      return () => ipcRenderer.removeListener('opencode:snapshot', handler)
+      ipcRenderer.on('agent:snapshot', handler)
+      return () => ipcRenderer.removeListener('agent:snapshot', handler)
     },
     getMessages: (sessionId: string): Promise<MessageRecord[]> =>
-      ipcRenderer.invoke('opencode:session:messages', sessionId),
+      ipcRenderer.invoke('agent:messages', sessionId),
     sendPrompt: (sessionId: string, text: string): Promise<{ ok: boolean }> =>
-      ipcRenderer.invoke('opencode:session:prompt', sessionId, text),
+      ipcRenderer.invoke('agent:send', sessionId, text),
     respondPermission: (
       sessionId: string,
       permissionId: string,
       response: 'once' | 'always' | 'reject'
     ): Promise<{ ok: boolean }> =>
-      ipcRenderer.invoke('opencode:session:respond', sessionId, permissionId, response),
+      ipcRenderer.invoke('agent:respond-permission', sessionId, permissionId, response),
     abortSession: (sessionId: string): Promise<{ ok: boolean }> =>
-      ipcRenderer.invoke('opencode:session:abort', sessionId),
+      ipcRenderer.invoke('agent:abort', sessionId),
     sendCommand: (sessionId: string, command: string, args: string): Promise<{ ok: boolean }> =>
-      ipcRenderer.invoke('opencode:session:command', sessionId, command, args),
+      ipcRenderer.invoke('agent:send-command', sessionId, command, args),
     listCommands: (sessionId: string): Promise<CommandDefinition[]> =>
-      ipcRenderer.invoke('opencode:commands:list', sessionId),
+      ipcRenderer.invoke('agent:list-commands', sessionId),
     createSession: (args: {
       instanceKey?: string
       directory: string
       prompt: string
       title?: string
-    }): Promise<{ sessionId: string }> => ipcRenderer.invoke('opencode:session:create', args),
-    getDiff: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('opencode:diff', path),
-    getTodo: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('opencode:todo', path)
+    }): Promise<{ sessionId: string }> => ipcRenderer.invoke('agent:dispatch', args),
+    getDiff: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('project:diff', path),
+    getTodo: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('project:todo', path)
   },
   project: {
     validate: (path: string): Promise<ProjectValidationResult> =>

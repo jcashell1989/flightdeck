@@ -1,0 +1,159 @@
+/**
+ * AdapterRegistry — owns N Adapter instances, merges their snapshots.
+ *
+ * Emits 'change' when any adapter emits 'change'.
+ * Replaces OpencodeRegistry.
+ */
+import { EventEmitter } from 'events'
+import type { Adapter, AggregateSnapshot, AggregateStatus, DispatchRequest, CommandDefinition } from './types'
+import type { NormalizedProject, InstanceConnectionStatus } from '../opencode/types'
+import type { FlightDeckDb } from '../db/stub'
+
+export class AdapterRegistry extends EventEmitter {
+  private adapters: Adapter[] = []
+  private disposed = false
+
+  constructor(_db: FlightDeckDb | null = null) {
+    super()
+    // db reserved for Phase 10
+  }
+
+  register(adapter: Adapter): void {
+    this.adapters.push(adapter)
+    adapter.on('change', () => this.emit('change'))
+  }
+
+  start(): void {
+    for (const a of this.adapters) a.start()
+  }
+
+  dispose(): void {
+    this.disposed = true
+    for (const a of this.adapters) a.dispose()
+    this.removeAllListeners()
+  }
+
+  snapshot(): AggregateSnapshot {
+    const projects: NormalizedProject[] = []
+    const perInstance: AggregateStatus['perInstance'] = []
+
+    for (const adapter of this.adapters) {
+      const snap = adapter.snapshot()
+
+      // Merge per-instance status rows.
+      perInstance.push(...snap.perInstance)
+
+      // Merge projects, deduplicating sessions by ID (first seen wins —
+      // managed adapters registered first take priority).
+      for (const p of snap.projects) {
+        const existing = projects.find((ep) => ep.path === p.path)
+        if (existing) {
+          const existingIds = new Set(existing.sessions.map((s) => s.id))
+          existing.sessions.push(...p.sessions.filter((s) => !existingIds.has(s.id)))
+        } else {
+          projects.push({ ...p, sessions: [...p.sessions] })
+        }
+      }
+    }
+
+    // Final defensive pass: ensure session IDs are globally unique.
+    // Multiple adapters share the same opencode.db — a session can legitimately
+    // appear in both the managed HTTP client AND the file-watch adapter.
+    const seenSessionIds = new Set<string>()
+    const dedupedProjects = projects
+      .map((p) => ({
+        ...p,
+        sessions: p.sessions.filter((s) => {
+          if (seenSessionIds.has(s.id)) return false
+          seenSessionIds.add(s.id)
+          return true
+        })
+      }))
+      .filter((p) => p.sessions.length > 0)
+
+    return {
+      projects: dedupedProjects,
+      aggregateStatus: {
+        status: this.deriveAggregate(perInstance),
+        perInstance
+      }
+    }
+  }
+
+  /** Find the adapter that owns a given sessionId (linear scan — N is small). */
+  findAdapterForSession(sessionId: string): Adapter | null {
+    for (const a of this.adapters) {
+      const snap = a.snapshot()
+      for (const p of snap.projects) {
+        if (p.sessions.some((s) => s.id === sessionId)) return a
+      }
+    }
+    return null
+  }
+
+  /** Find a dispatchable adapter for a given profileId. */
+  findAdapterForDispatch(profileId: string): Adapter | null {
+    // Return first adapter that can dispatch; profileId routing can be
+    // extended here in Phase 10 when we have per-adapter profile affinity.
+    return this.adapters.find((a) => a.canDispatch && a.dispatch) ?? null
+  }
+
+  // ── Convenience pass-throughs ────────────────────────────────────────────
+
+  async send(sessionId: string, text: string): Promise<void> {
+    const a = this.findAdapterForSession(sessionId)
+    if (!a?.send) throw new Error(`no adapter can send to session ${sessionId}`)
+    return a.send(sessionId, text)
+  }
+
+  async sendCommand(sessionId: string, command: string, args: string): Promise<{ ok: boolean }> {
+    const a = this.findAdapterForSession(sessionId)
+    if (!a?.sendCommand) throw new Error(`no adapter can sendCommand to session ${sessionId}`)
+    return a.sendCommand(sessionId, command, args)
+  }
+
+  async listCommands(sessionId: string): Promise<CommandDefinition[]> {
+    const a = this.findAdapterForSession(sessionId)
+    if (!a?.listCommands) return []
+    return a.listCommands(sessionId)
+  }
+
+  async abort(sessionId: string): Promise<void> {
+    const a = this.findAdapterForSession(sessionId)
+    if (!a?.abort) throw new Error(`no adapter can abort session ${sessionId}`)
+    return a.abort(sessionId)
+  }
+
+  async respondPermission(
+    sessionId: string,
+    permissionId: string,
+    response: 'once' | 'always' | 'reject'
+  ): Promise<void> {
+    const a = this.findAdapterForSession(sessionId)
+    if (!a?.respondPermission) throw new Error(`no adapter can respond to permission for session ${sessionId}`)
+    return a.respondPermission(sessionId, permissionId, response)
+  }
+
+  async fetchMessages(sessionId: string): Promise<Array<{ info: unknown; parts: unknown[] }>> {
+    const a = this.findAdapterForSession(sessionId)
+    if (!a?.fetchMessages) return []
+    return a.fetchMessages(sessionId)
+  }
+
+  async dispatch(req: DispatchRequest): Promise<{ sessionId: string }> {
+    const a = this.findAdapterForDispatch(req.profileId)
+    if (!a?.dispatch) throw new Error(`no adapter can dispatch for profile ${req.profileId}`)
+    return a.dispatch(req)
+  }
+
+  private deriveAggregate(
+    perInstance: AggregateStatus['perInstance']
+  ): AggregateStatus['status'] {
+    if (perInstance.length === 0) return 'disabled'
+    const statuses = perInstance.map((i) => i.status) as InstanceConnectionStatus[]
+    if (statuses.some((s) => s === 'error')) return 'error'
+    if (statuses.some((s) => s === 'reconnecting')) return 'reconnecting'
+    if (statuses.some((s) => s === 'connecting')) return 'connecting'
+    return 'connected'
+  }
+}
