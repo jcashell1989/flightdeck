@@ -35,7 +35,7 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-interface ProcessEntry {
+export interface ProcessEntry {
   pid: number
   sessionId: string
   cwd: string
@@ -84,6 +84,11 @@ export class ClaudeMonitor extends EventEmitter {
     this.processes.clear()
     this.sessions.clear()
     this.removeAllListeners()
+  }
+
+  /** Expose the live process map for external inspection (e.g. adapter write-path guards). */
+  getProcesses(): ReadonlyMap<number, ProcessEntry> {
+    return this.processes
   }
 
   getSnapshot(): ClaudeSnapshot {
@@ -195,15 +200,34 @@ export class ClaudeMonitor extends EventEmitter {
     if (!entry) return
     this.processes.delete(pid)
 
-    // Mark session as idle (clean exit) or keep as error (was running).
+    // Check whether any other pid still references the same sessionId.
+    let sibling: ProcessEntry | undefined
+    for (const e of this.processes.values()) {
+      if (e.sessionId === entry.sessionId) {
+        sibling = e
+        break
+      }
+    }
+
+    if (sibling) {
+      // A sibling process is still alive for this session — keep session alive,
+      // update pid to the sibling so refreshSession uses the correct entry.
+      const session = this.sessions.get(entry.sessionId)
+      if (session) {
+        this.sessions.set(entry.sessionId, { ...session, pid: sibling.pid })
+      }
+      this.emit('change')
+      return
+    }
+
+    // No sibling — proceed with normal eviction.
     const session = this.sessions.get(entry.sessionId)
     if (session) {
       if (session.state === 'running') {
         // Process died while running — treat as error.
         this.sessions.set(entry.sessionId, { ...session, state: 'error' })
       } else {
-        // Clean exit — remove immediately (process is already gone from this.processes,
-        // so pollLiveness will never see it to clean up).
+        // Clean exit — remove immediately.
         this.sessions.delete(entry.sessionId)
       }
     }
@@ -352,6 +376,26 @@ export class ClaudeMonitor extends EventEmitter {
       if (!isProcessAlive(pid)) {
         // Process is dead — remove from tracking.
         this.processes.delete(pid)
+
+        // Check whether a sibling pid still covers this sessionId.
+        let sibling: ProcessEntry | undefined
+        for (const e of this.processes.values()) {
+          if (e.sessionId === entry.sessionId) {
+            sibling = e
+            break
+          }
+        }
+
+        if (sibling) {
+          // Sibling alive — update pid on the session entry and continue.
+          const session = this.sessions.get(entry.sessionId)
+          if (session) {
+            this.sessions.set(entry.sessionId, { ...session, pid: sibling.pid })
+            changed = true
+          }
+          continue
+        }
+
         const session = this.sessions.get(entry.sessionId)
         if (session && session.state === 'running') {
           this.sessions.set(entry.sessionId, { ...session, state: 'error' })

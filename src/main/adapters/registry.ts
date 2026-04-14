@@ -71,8 +71,32 @@ export class AdapterRegistry extends EventEmitter {
       }))
       .filter((p) => p.sessions.length > 0)
 
+    // Build a sessionId → adapter map for capability stamping.
+    const adapterBySession = new Map<string, Adapter>()
+    for (const adapter of this.adapters) {
+      const snap = adapter.snapshot()
+      for (const p of snap.projects) {
+        for (const s of p.sessions) {
+          if (!adapterBySession.has(s.id)) adapterBySession.set(s.id, adapter)
+        }
+      }
+    }
+
+    // Stamp canReply / canAbort on each session based on adapter capabilities.
+    const stampedProjects = dedupedProjects.map((p) => ({
+      ...p,
+      sessions: p.sessions.map((s) => {
+        const a = adapterBySession.get(s.id)
+        if (!a) return s
+        const canReply = typeof a.send === 'function' ? true : undefined
+        const canAbort = typeof a.abort === 'function' ? true : undefined
+        if (canReply === undefined && canAbort === undefined) return s
+        return { ...s, ...(canReply !== undefined ? { canReply } : {}), ...(canAbort !== undefined ? { canAbort } : {}) }
+      })
+    }))
+
     return {
-      projects: dedupedProjects,
+      projects: stampedProjects,
       aggregateStatus: {
         status: this.deriveAggregate(perInstance),
         perInstance

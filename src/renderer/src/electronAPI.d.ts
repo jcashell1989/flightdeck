@@ -37,6 +37,7 @@ export interface ElectronAPI {
     abortSession: (sessionId: string) => Promise<{ ok: boolean }>
     sendCommand: (sessionId: string, command: string, args: string) => Promise<{ ok: boolean }>
     listCommands: (sessionId: string) => Promise<CommandDefinition[]>
+    getSessionLogs: (sessionId: string) => Promise<string[]>
     createSession: (args: {
       instanceKey?: string
       directory: string

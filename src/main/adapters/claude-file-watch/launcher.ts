@@ -110,19 +110,23 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
   ): Promise<ClaudeLaunchResult> {
     if (this.disposed) throw new Error('ClaudeLauncher is disposed')
 
-    const args = this.buildArgs(prompt, profile)
+    const args = this.buildLaunchArgs(prompt, profile)
     return this.spawnAndWait(args, profile, directory)
   }
 
   /**
    * Resume an existing claude session by session ID. Same as launch but
    * prepends `--resume <sessionId>` to the args.
+   *
+   * Accepts an optional `onStderr` callback that receives individual stderr
+   * lines as they arrive (used by the adapter for log buffering).
    */
   async resume(
     sessionId: string,
     profile: AgentProfile,
     directory: string,
-    prompt: string
+    prompt: string,
+    options?: { onStderr?: (line: string) => void }
   ): Promise<ClaudeLaunchResult> {
     if (this.disposed) throw new Error('ClaudeLauncher is disposed')
 
@@ -133,8 +137,21 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
       }
     }
 
-    const args = ['--resume', sessionId, ...this.buildArgs(prompt, profile)]
-    return this.spawnAndWait(args, profile, directory)
+    const args = ['--resume', sessionId, ...this.buildResumeArgs(prompt)]
+    return this.spawnAndWait(args, profile, directory, options?.onStderr)
+  }
+
+  /**
+   * Send SIGTERM to any running instance that matches sessionId.
+   * Resolves once the process has exited (or was already gone).
+   */
+  async killSession(sessionId: string): Promise<void> {
+    for (const entry of this.instances.values()) {
+      if (entry.sessionId === sessionId) {
+        await killChild(entry.process)
+        return
+      }
+    }
   }
 
   /**
@@ -183,8 +200,8 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
-  /** Build the base args array for a `claude -p` invocation. */
-  private buildArgs(prompt: string, profile: AgentProfile): string[] {
+  /** Build args for a new `claude -p` launch (includes --model if set). */
+  private buildLaunchArgs(prompt: string, profile: AgentProfile): string[] {
     const args = [
       '-p',
       prompt,
@@ -201,13 +218,32 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
   }
 
   /**
+   * Build args for resuming an existing session. No `--model` flag — the
+   * resumed session already knows its model.
+   */
+  private buildResumeArgs(prompt: string): string[] {
+    return [
+      '-p',
+      prompt,
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--permission-mode',
+      'acceptEdits'
+    ]
+  }
+
+  /**
    * Spawn the claude binary with the given args, wait for the init line, and
    * register the process in the instances map.
+   *
+   * `onStderr` receives individual stderr lines as they arrive (optional).
    */
   private spawnAndWait(
     args: string[],
     profile: AgentProfile,
-    directory: string
+    directory: string,
+    onStderr?: (line: string) => void
   ): Promise<ClaudeLaunchResult> {
     return new Promise((resolve, reject) => {
       const child = spawn(this.claudePath, args, {
@@ -218,9 +254,13 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
       })
 
       // Drain stderr to surface errors in the main-process console.
+      // Also forward each line to the optional onStderr callback.
       child.stderr?.on('data', (buf: Buffer) => {
         const line = buf.toString().trimEnd()
-        if (line) console.error(`[claude:${profile.label}] ${line}`)
+        if (line) {
+          console.error(`[claude:${profile.label}] ${line}`)
+          onStderr?.(line)
+        }
       })
       child.stderr?.resume()
 

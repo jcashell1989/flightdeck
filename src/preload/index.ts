@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('agent:send-command', sessionId, command, args),
     listCommands: (sessionId: string): Promise<CommandDefinition[]> =>
       ipcRenderer.invoke('agent:list-commands', sessionId),
+    getSessionLogs: (sessionId: string): Promise<string[]> =>
+      ipcRenderer.invoke('agent:logs', sessionId),
     createSession: (args: {
       instanceKey?: string
       directory: string

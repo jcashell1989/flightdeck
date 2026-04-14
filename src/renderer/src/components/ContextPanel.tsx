@@ -15,7 +15,7 @@ interface ContextPanelProps {
   onToggleFullScreen: () => void
 }
 
-type Tab = 'conversation' | 'diff' | 'todo'
+type Tab = 'conversation' | 'diff' | 'todo' | 'logs'
 
 export function ContextPanel({
   session,
@@ -101,6 +101,9 @@ export function ContextPanel({
         <TabButton active={tab === 'todo'} onClick={() => setTab('todo')}>
           Todo
         </TabButton>
+        <TabButton active={tab === 'logs'} onClick={() => setTab('logs')}>
+          Logs
+        </TabButton>
       </div>
 
       {/* Tab body */}
@@ -114,6 +117,7 @@ export function ContextPanel({
         )}
         {tab === 'diff' && <DiffTab project={project} useMock={useMock} />}
         {tab === 'todo' && <TodoTab project={project} useMock={useMock} />}
+        {tab === 'logs' && <LogsTab session={session} useMock={useMock} />}
       </div>
     </div>
   )
@@ -192,11 +196,13 @@ function ConversationTab({
     el.scrollTop = el.scrollHeight
   }, [lastMessageFingerprint])
 
+  // Use adapter-stamped canReply when present; fall back to state-based heuristic.
   const canReply =
     !useMock &&
-    (session.state === 'running' ||
-      session.state === 'idle' ||
-      session.state === 'question')
+    (session.canReply ??
+      (session.state === 'running' ||
+        session.state === 'idle' ||
+        session.state === 'question'))
 
   const handleSend = useCallback(async () => {
     const text = replyDraft.trim()
@@ -600,6 +606,93 @@ function bannerBtn(color: string): CSSProperties {
     color,
     cursor: 'pointer'
   }
+}
+
+// ─── Logs Tab ─────────────────────────────────────────────────────────────
+
+function LogsTab({ session, useMock }: { session: Session; useMock: boolean }) {
+  const [lines, setLines] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+
+  const fetchLogs = useCallback(async () => {
+    if (useMock) return
+    const api = window.electronAPI?.opencode
+    if (!api?.getSessionLogs) {
+      setError('getSessionLogs not available')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await api.getSessionLogs(session.id)
+      setLines(result)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [session.id, useMock])
+
+  useEffect(() => {
+    void fetchLogs()
+  }, [fetchLogs])
+
+  // Auto-scroll to bottom when lines change.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [lines])
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div
+        style={{
+          padding: '6px 12px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          flexShrink: 0
+        }}
+      >
+        <button onClick={() => void fetchLogs()} style={headerBtn}>
+          Refresh
+        </button>
+      </div>
+      <div ref={scrollRef} style={{ flex: 1, overflow: 'auto', padding: 12, minHeight: 0 }}>
+        {loading && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>loading logs…</div>
+        )}
+        {error && (
+          <div style={{ color: 'var(--status-error)', fontSize: 11 }}>{error}</div>
+        )}
+        {useMock && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 11, marginBottom: 8 }}>
+            mock mode — no live logs
+          </div>
+        )}
+        {!loading && !error && !useMock && lines.length === 0 && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>no stderr output</div>
+        )}
+        {lines.length > 0 && (
+          <pre
+            className="mono"
+            style={{
+              fontSize: 11,
+              lineHeight: 1.4,
+              margin: 0,
+              color: 'var(--fg-muted)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all'
+            }}
+          >
+            {lines.join('\n')}
+          </pre>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ─── Diff Tab ─────────────────────────────────────────────────────────────

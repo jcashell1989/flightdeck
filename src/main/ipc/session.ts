@@ -76,6 +76,13 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
     return { ok: true }
   })
 
+  safeHandle('agent:logs', async (_e, sessionId: string) => {
+    if (!_registry) return []
+    const adapter = _registry.findAdapterForSession(sessionId)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (adapter as any)?.getSessionLog?.(sessionId) ?? []
+  })
+
   safeHandle(
     'agent:dispatch',
     async (

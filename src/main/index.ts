@@ -147,6 +147,8 @@ app.whenReady().then(async () => {
   // and so the renderer's config:get cannot race the load.
   ipcSession.init(adapterRegistry, opencodeHttpAdapter)
   registerIpc(launcher)
+  // Wire the launcher into the claude file-watch adapter for send/abort.
+  claudeFileWatchAdapter.setLauncher(launcher)
   // Wire dispatched sessions into the claude monitor for immediate JSONL watch.
   launcher.on('started', ({ pid, sessionId, directory }: { pid: number; sessionId: string; directory: string }) => {
     claudeFileWatchAdapter.getMonitor().trackLaunchedSession({ pid, sessionId, cwd: directory, startedAt: Date.now() })
