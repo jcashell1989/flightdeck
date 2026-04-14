@@ -33,7 +33,7 @@ export function TicketCard({ ticket, selected, onClick }: TicketCardProps) {
         <span style={{ fontSize: 10, color: 'var(--fg-muted)', fontFamily: 'monospace' }}>{ticket.id}</span>
         <span style={{ fontSize: 10, color: PRIORITY_COLORS[ticket.priority] ?? 'var(--fg-muted)', fontWeight: 600 }}>{ticket.priority}</span>
       </div>
-      <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.4, wordBreak: 'break-word' }}>
+      <div style={{ fontSize: 12, color: 'var(--fg-primary)', lineHeight: 1.4, wordBreak: 'break-word' }}>
         {ticket.title}
       </div>
     </button>
