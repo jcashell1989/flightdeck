@@ -5,7 +5,7 @@
  * Replaces OpencodeRegistry.
  */
 import { EventEmitter } from 'events'
-import type { Adapter, AggregateSnapshot, AggregateStatus, DispatchRequest, CommandDefinition } from './types'
+import type { Adapter, AdapterSnapshot, AggregateSnapshot, AggregateStatus, ControlMode, DispatchRequest, CommandDefinition } from './types'
 import type { NormalizedProject, InstanceConnectionStatus } from '../opencode/types'
 import type { FlightDeckDb, SessionRecord } from '../db/index'
 
@@ -59,14 +59,12 @@ export class AdapterRegistry extends EventEmitter {
     const projects: NormalizedProject[] = []
     const perInstance: AggregateStatus['perInstance'] = []
 
-    for (const adapter of this.adapters) {
-      const snap = adapter.snapshot()
+    // Collect each adapter's snapshot once — reused for dedup and stamping.
+    const adapterSnaps: Array<[Adapter, AdapterSnapshot]> = this.adapters.map((a) => [a, a.snapshot()])
 
-      // Merge per-instance status rows.
+    for (const [, snap] of adapterSnaps) {
       perInstance.push(...snap.perInstance)
 
-      // Merge projects, deduplicating sessions by ID (first seen wins —
-      // managed adapters registered first take priority).
       for (const p of snap.projects) {
         const existing = projects.find((ep) => ep.path === p.path)
         if (existing) {
@@ -79,8 +77,6 @@ export class AdapterRegistry extends EventEmitter {
     }
 
     // Final defensive pass: ensure session IDs are globally unique.
-    // Multiple adapters share the same opencode.db — a session can legitimately
-    // appear in both the managed HTTP client AND the file-watch adapter.
     const seenSessionIds = new Set<string>()
     const dedupedProjects = projects
       .map((p) => ({
@@ -93,10 +89,9 @@ export class AdapterRegistry extends EventEmitter {
       }))
       .filter((p) => p.sessions.length > 0)
 
-    // Build a sessionId → adapter map for capability stamping.
+    // Build sessionId → adapter map from already-collected snapshots.
     const adapterBySession = new Map<string, Adapter>()
-    for (const adapter of this.adapters) {
-      const snap = adapter.snapshot()
+    for (const [adapter, snap] of adapterSnaps) {
       for (const p of snap.projects) {
         for (const s of p.sessions) {
           if (!adapterBySession.has(s.id)) adapterBySession.set(s.id, adapter)
@@ -104,16 +99,24 @@ export class AdapterRegistry extends EventEmitter {
       }
     }
 
-    // Stamp canReply / canAbort on each session based on adapter capabilities.
+    // Stamp adapterId / controlMode / canReply / canAbort / canCommand on each session.
     const stampedProjects = dedupedProjects.map((p) => ({
       ...p,
       sessions: p.sessions.map((s) => {
         const a = adapterBySession.get(s.id)
         if (!a) return s
+        const controlMode: ControlMode = a.canDispatch ? 'managed' : 'watched'
         const canReply = typeof a.send === 'function' ? true : undefined
         const canAbort = typeof a.abort === 'function' ? true : undefined
-        if (canReply === undefined && canAbort === undefined) return s
-        return { ...s, ...(canReply !== undefined ? { canReply } : {}), ...(canAbort !== undefined ? { canAbort } : {}) }
+        const canCommand = typeof a.sendCommand === 'function' ? true : undefined
+        return {
+          ...s,
+          adapterId: a.id,
+          controlMode,
+          ...(canReply !== undefined ? { canReply } : {}),
+          ...(canAbort !== undefined ? { canAbort } : {}),
+          ...(canCommand !== undefined ? { canCommand } : {})
+        }
       })
     }))
 

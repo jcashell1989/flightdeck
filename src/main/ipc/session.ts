@@ -79,8 +79,7 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
   safeHandle('agent:logs', async (_e, sessionId: string) => {
     if (!_registry) return []
     const adapter = _registry.findAdapterForSession(sessionId)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (adapter as any)?.getSessionLog?.(sessionId) ?? []
+    return adapter?.getSessionLog?.(sessionId) ?? []
   })
 
   safeHandle(
@@ -125,12 +124,13 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
   })
 }
 
+let _broadcastChangeHandler: (() => void) | null = null
+
 export function attachBroadcast(
   registry: AdapterRegistry,
   broadcast: (channel: string, payload: unknown) => void
 ): void {
-  registry.removeAllListeners('change')
-  registry.on('change', () => {
-    broadcast('agent:snapshot', registry.snapshot())
-  })
+  if (_broadcastChangeHandler) registry.off('change', _broadcastChangeHandler)
+  _broadcastChangeHandler = () => broadcast('agent:snapshot', registry.snapshot())
+  registry.on('change', _broadcastChangeHandler)
 }

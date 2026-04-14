@@ -42,7 +42,7 @@ export type CommandDefinition = {
   template?: string
 }
 
-export type controlMode = 'managed' | 'watched'
+export type ControlMode = 'managed' | 'watched'
 
 export interface Adapter {
   id: string
@@ -71,5 +71,6 @@ export interface Adapter {
   fetchMessages?: (
     sessionId: string
   ) => Promise<Array<{ info: unknown; parts: unknown[] }>>
+  getSessionLog?: (sessionId: string) => string[]
   dispatch?: (req: DispatchRequest) => Promise<{ sessionId: string }>
 }
