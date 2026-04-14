@@ -151,8 +151,12 @@ export async function parseSessionState(
       )
       if (toolUse?.name === 'AskUserQuestion') {
         state = 'question'
-        const questionText = (toolUse.input as { question?: string }).question ?? ''
-        currentAction = '? ' + questionText.slice(0, 80).replace(/\n/g, ' ')
+        const questions = (toolUse.input as { questions?: Array<{ question?: string; header?: string }> }).questions
+        const first = questions?.[0]
+        const questionText = first?.header ?? first?.question ?? ''
+        currentAction = questionText
+          ? '? ' + questionText.slice(0, 80).replace(/\n/g, ' ')
+          : '? waiting for input'
       } else {
         state = 'running'
         currentAction = toolUse ? toolLabel(toolUse.name) : '⚙ working…'
