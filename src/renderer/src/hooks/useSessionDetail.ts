@@ -49,18 +49,6 @@ export function useSessionDetail(
       return
     }
 
-    // Claude Code sessions are monitor-only: flight deck observes their state
-    // from ~/.claude/sessions/ but has no client that owns them, so the
-    // opencode:session:messages IPC path is meaningless and would throw.
-    // Short-circuit to a friendly empty state instead of hitting IPC.
-    if (agentType === 'claude-code') {
-      setMessages([])
-      setError(null)
-      setUnavailable('Monitor-only — conversation replay is not available for claude-code sessions.')
-      setLoading(false)
-      return
-    }
-
     if (useMock) {
       setMessages(mockMessages(sessionId))
       setError(null)

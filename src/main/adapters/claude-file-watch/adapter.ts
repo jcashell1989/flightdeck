@@ -17,7 +17,7 @@
  * their terminal instead.
  */
 import { EventEmitter } from 'events'
-import { readFile } from 'fs/promises'
+import { readFile, stat, open } from 'fs/promises'
 import { ClaudeMonitor } from './monitor'
 import type { ClaudeLauncher } from './launcher'
 import type { Adapter, AdapterSnapshot } from '../types'
@@ -127,21 +127,44 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
   }
 
   async fetchMessages(sessionId: string): Promise<Array<{ info: unknown; parts: unknown[] }>> {
-    const cwd = this.getCwd(sessionId) ?? ''
+    const cwd = this.getCwd(sessionId)
+    if (!cwd) return []
+
     const jsonlPath = await this.monitor.findJsonlPath(sessionId, cwd)
     if (!jsonlPath) return []
 
+    const MAX_READ_BYTES = 5 * 1024 * 1024 // 5 MB cap
+
     let raw: string
     try {
-      raw = await readFile(jsonlPath, 'utf8')
+      const fileStat = await stat(jsonlPath)
+      const size = fileStat.size
+      if (size <= MAX_READ_BYTES) {
+        raw = await readFile(jsonlPath, 'utf8')
+      } else {
+        // Tail the last 5 MB to avoid stalling the event loop on large files.
+        const fd = await open(jsonlPath, 'r')
+        try {
+          const buf = Buffer.alloc(MAX_READ_BYTES)
+          await fd.read(buf, 0, MAX_READ_BYTES, size - MAX_READ_BYTES)
+          raw = buf.toString('utf8')
+          // Drop first (likely partial) line.
+          const nl = raw.indexOf('\n')
+          raw = nl >= 0 ? raw.slice(nl + 1) : raw
+        } finally {
+          await fd.close()
+        }
+      }
     } catch {
       return []
     }
 
     const results: Array<{ info: unknown; parts: unknown[] }> = []
+    let lineIndex = 0
     for (const line of raw.split('\n')) {
       const trimmed = line.trim()
       if (!trimmed) continue
+      lineIndex++
       let entry: Record<string, unknown>
       try {
         entry = JSON.parse(trimmed) as Record<string, unknown>
@@ -155,10 +178,15 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
       if (!msg) continue
 
       const role = (msg['role'] as string | undefined) ?? type
-      const id = (msg['id'] as string | undefined) ?? (entry['uuid'] as string | undefined)
-      const rawContent = msg['content']
+      const id = (msg['id'] as string | undefined)
+        ?? (entry['uuid'] as string | undefined)
+        ?? `claude-${sessionId}-${lineIndex}`
 
-      // Normalise content to ContentBlock[]
+      // Parse timestamp for ordering.
+      const ts = entry['timestamp']
+      const created = typeof ts === 'string' ? Date.parse(ts) : undefined
+
+      const rawContent = msg['content']
       let blocks: Array<Record<string, unknown>>
       if (typeof rawContent === 'string') {
         blocks = [{ type: 'text', text: rawContent }]
@@ -173,7 +201,7 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
         const btype = block['type'] as string | undefined
         if (btype === 'text') {
           const text = (block['text'] as string | undefined) ?? ''
-          if (text.trim()) parts.push({ type: 'text', text })
+          if (text) parts.push({ type: 'text', text })
         } else if (btype === 'tool_use') {
           const name = (block['name'] as string | undefined) ?? 'tool'
           const input = block['input']
@@ -182,17 +210,18 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
             tool: name,
             state: {
               status: 'complete',
-              output: input != null ? JSON.stringify(input, null, 2) : ''
+              input: input != null ? JSON.stringify(input, null, 2) : ''
             }
           })
-        } else if (btype === 'tool_result') {
-          // Skip tool_result blocks — they come in user messages and are noise.
-          continue
         }
+        // tool_result blocks skipped — pairing deferred to follow-up.
       }
 
       if (parts.length === 0) continue
-      results.push({ info: { role, id }, parts })
+      results.push({
+        info: { role, id, ...(created !== undefined && !isNaN(created) ? { time: { created } } : {}) },
+        parts
+      })
     }
 
     return results
