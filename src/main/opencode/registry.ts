@@ -151,7 +151,33 @@ export class OpencodeRegistry extends EventEmitter {
     const perInstance: AggregateStatus['perInstance'] = []
     for (const [key, client] of this.clients) {
       const s: InstanceSnapshot = client.snapshot()
-      projects.push(...s.projects)
+      if (key.startsWith('managed:')) {
+        // Managed clients are scoped to a single project directory encoded in
+        // the key as "managed:<profileId>:<directory>". Merge into the existing
+        // project entry (if any) rather than adding a second entry with the
+        // same path — duplicate project entries cause React key collisions when
+        // sibling session cards share the same session ID.
+        // Only surface sessions that were created after this managed client was
+        // constructed. Sessions predating the client are historical work in that
+        // directory — not sessions this client dispatched — and showing them
+        // floods the dashboard with old cards.
+        const clientCreatedAt = client.createdAt
+        const targetDir = key.split(':').slice(2).join(':')
+        for (const mp of s.projects.filter((p) => p.path === targetDir)) {
+          const ownedSessions = mp.sessions.filter((ses) => ses.startedAt >= clientCreatedAt)
+          if (ownedSessions.length === 0) continue
+          const owned = { ...mp, sessions: ownedSessions }
+          const existing = projects.find((p) => p.path === owned.path)
+          if (existing) {
+            const existingIds = new Set(existing.sessions.map((ses) => ses.id))
+            existing.sessions.push(...owned.sessions.filter((ses) => !existingIds.has(ses.id)))
+          } else {
+            projects.push(owned)
+          }
+        }
+      } else {
+        projects.push(...s.projects)
+      }
       perInstance.push({ key, status: s.status, lastError: s.lastError })
     }
 
@@ -172,7 +198,12 @@ export class OpencodeRegistry extends EventEmitter {
       for (const p of this.opencodeFileWatch.getSnapshot()) {
         const existing = projects.find((ep) => ep.path === p.path)
         if (existing) {
-          existing.sessions.push(...p.sessions)
+          // Deduplicate: a session may appear in both the HTTP client and the
+          // file-watch adapter (e.g. a freshly dispatched session that is
+          // within the recency window). Same session ID as a sibling React
+          // key causes a "duplicate key" warning and broken reconciliation.
+          const existingIds = new Set(existing.sessions.map((s) => s.id))
+          existing.sessions.push(...p.sessions.filter((s) => !existingIds.has(s.id)))
         } else {
           projects.push(p)
         }
@@ -188,8 +219,26 @@ export class OpencodeRegistry extends EventEmitter {
       this.mergeCodexSessions(projects, this._codexSnapCache.sessions)
     }
 
+    // Final defensive pass: ensure session IDs are globally unique.
+    // Multiple adapters share the same opencode.db — a session can legitimately
+    // appear in both the managed HTTP client AND the file-watch adapter. Both
+    // path-dedup steps above handle the common case, but edge cases (different
+    // paths, same session ID) can still reach the renderer and trigger React
+    // "duplicate key" errors in flat session lists. Strip any second occurrence.
+    const seenSessionIds = new Set<string>()
+    const dedupedProjects = projects
+      .map((p) => ({
+        ...p,
+        sessions: p.sessions.filter((s) => {
+          if (seenSessionIds.has(s.id)) return false
+          seenSessionIds.add(s.id)
+          return true
+        })
+      }))
+      .filter((p) => p.sessions.length > 0)
+
     return {
-      projects,
+      projects: dedupedProjects,
       aggregateStatus: {
         status: this.deriveAggregate(perInstance),
         perInstance

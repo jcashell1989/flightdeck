@@ -87,12 +87,19 @@ export function CmdKDispatch({
   )
 
   // Default target + focus on open. Preset path (from "+ New Session") takes priority.
+  // Otherwise pick the project with the most recent session activity so the
+  // dispatch overlay doesn't default to an arbitrary (e.g. home-directory) project.
   useEffect(() => {
     if (!open) return
     if (presetProjectPath) {
       setTargetPath(presetProjectPath)
     } else if (!targetPath && projects.length > 0) {
-      setTargetPath(projects[0].path)
+      const mostRecent = [...projects].sort((a, b) => {
+        const aLast = Math.max(0, ...a.sessions.map((s) => s.lastActivity))
+        const bLast = Math.max(0, ...b.sessions.map((s) => s.lastActivity))
+        return bLast - aLast
+      })
+      setTargetPath(mostRecent[0].path)
     }
     setTimeout(() => textareaRef.current?.focus(), 0)
   }, [open, projects, targetPath, presetProjectPath])

@@ -67,6 +67,10 @@ export class OpencodeInstanceClient extends EventEmitter {
    *                  so managed and configured instances on the same
    *                  host:port do not collide in React keys.
    */
+  /** Unix ms when this client instance was constructed. Used to filter
+   *  out sessions that pre-date this client (managed-client use case). */
+  readonly createdAt: number = Date.now()
+
   constructor(
     public readonly instance: OpencodeInstance,
     public readonly clientKey: string = `${instance.host}:${instance.port}`
