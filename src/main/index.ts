@@ -8,6 +8,7 @@ import { configStore } from './config/store'
 import { HttpServer } from './http/index'
 import { getMobileRoot } from './http/static'
 import { AdapterRegistry } from './adapters/registry'
+import { FlightDeckDb } from './db/index'
 import { opencodeHttpAdapter } from './adapters/opencode-http/adapter'
 import { ClaudeFileWatchAdapter } from './adapters/claude-file-watch/adapter'
 import { ClaudeMonitor } from './adapters/claude-file-watch/monitor'
@@ -134,7 +135,8 @@ const opencodeFileWatchAdapter = new OpencodeFileWatchAdapter(opencodeFileWatchM
 const codexMonitorInstance = new CodexMonitor()
 const codexSqliteAdapter = new CodexSqliteAdapter(codexMonitorInstance)
 
-const adapterRegistry = new AdapterRegistry(null)
+const flightDeckDb = new FlightDeckDb()
+const adapterRegistry = new AdapterRegistry(flightDeckDb)
 adapterRegistry.register(opencodeHttpAdapter)       // managed (canDispatch=true) — first, wins dedup
 adapterRegistry.register(claudeFileWatchAdapter)
 adapterRegistry.register(opencodeFileWatchAdapter)
@@ -143,6 +145,11 @@ adapterRegistry.register(codexSqliteAdapter)
 app.whenReady().then(async () => {
   // Config must be loaded before any IPC handler can read it.
   await configStore.init()
+  try {
+    flightDeckDb.open(join(app.getPath('userData'), 'flightdeck.db'))
+  } catch (e) {
+    console.error('[main] FlightDeckDb failed to open (non-fatal):', e)
+  }
   claudeLauncher = await ClaudeLauncher.create()
   const launcher = claudeLauncher
   // Register IPC AFTER init so handlers never hit an un-initialised store,
@@ -257,6 +264,7 @@ app.on('before-quit', (event) => {
     try {
       adapterRegistry.dispose()
       analyticsMonitor.dispose()
+      flightDeckDb.close()
       await Promise.all([
         opencodeHttpAdapter.getLauncher().stopAllAsync(),
         claudeLauncher?.stopAllAsync() ?? Promise.resolve(),

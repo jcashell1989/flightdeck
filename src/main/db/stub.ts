@@ -1,3 +1,2 @@
-// Stub — replaced by real FlightDeckDb in Phase 10.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type FlightDeckDb = any
+// Re-export real FlightDeckDb — stub replaced by Phase 10 implementation.
+export type { FlightDeckDb } from './index'

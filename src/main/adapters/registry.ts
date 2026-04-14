@@ -7,20 +7,42 @@
 import { EventEmitter } from 'events'
 import type { Adapter, AggregateSnapshot, AggregateStatus, DispatchRequest, CommandDefinition } from './types'
 import type { NormalizedProject, InstanceConnectionStatus } from '../opencode/types'
-import type { FlightDeckDb } from '../db/stub'
+import type { FlightDeckDb, SessionRecord } from '../db/index'
 
 export class AdapterRegistry extends EventEmitter {
   private adapters: Adapter[] = []
   private disposed = false
+  private db: FlightDeckDb | null
 
-  constructor(_db: FlightDeckDb | null = null) {
+  constructor(db: FlightDeckDb | null = null) {
     super()
-    // db reserved for Phase 10
+    this.db = db
   }
 
   register(adapter: Adapter): void {
     this.adapters.push(adapter)
-    adapter.on('change', () => this.emit('change'))
+    adapter.on('change', () => {
+      this.emit('change')
+      this.persistSnapshot()
+    })
+  }
+
+  private persistSnapshot(): void {
+    if (!this.db) return
+    const snap = this.snapshot()
+    for (const p of snap.projects) {
+      for (const s of p.sessions) {
+        this.db.upsertSession({
+          id: s.id,
+          agentType: s.agentType,
+          projectId: p.id ?? p.path,
+          projectPath: p.path,
+          state: s.state,
+          startedAt: s.startedAt,
+          lastActivity: s.lastActivity
+        } as SessionRecord)
+      }
+    }
   }
 
   start(): void {
@@ -94,6 +116,36 @@ export class AdapterRegistry extends EventEmitter {
         return { ...s, ...(canReply !== undefined ? { canReply } : {}), ...(canAbort !== undefined ? { canAbort } : {}) }
       })
     }))
+
+    // Hydrate from DB: add historical sessions not currently live.
+    if (this.db) {
+      const historical = this.db.getRecentSessions()
+      for (const rec of historical) {
+        if (seenSessionIds.has(rec.id)) continue  // already live
+        // Find or create the project entry
+        let proj = stampedProjects.find(p => p.path === rec.projectPath)
+        if (!proj) {
+          proj = {
+            id: rec.projectId,
+            name: rec.projectPath.split('/').pop() ?? rec.projectPath,
+            path: rec.projectPath,
+            sessions: []
+          }
+          stampedProjects.push(proj)
+        }
+        proj.sessions.push({
+          id: rec.id,
+          agentType: rec.agentType as 'opencode' | 'claude-code' | 'codex',
+          state: 'idle' as const,
+          currentAction: '◌ historical',
+          startedAt: rec.startedAt,
+          lastActivity: rec.lastActivity,
+          projectId: rec.projectId,
+          instanceKey: 'historical',
+        })
+        seenSessionIds.add(rec.id)
+      }
+    }
 
     return {
       projects: stampedProjects,
