@@ -117,11 +117,6 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
     if (!validPath(path)) throw new Error('invalid path')
     return runCmd('git', ['-C', path, 'diff', '--no-color'], path)
   })
-
-  safeHandle('project:todo', async (_e, path: string) => {
-    if (!validPath(path)) throw new Error('invalid path')
-    return runCmd('td', ['usage', '-q', '-w', path], path)
-  })
 }
 
 let _broadcastChangeHandler: (() => void) | null = null

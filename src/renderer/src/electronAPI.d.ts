@@ -47,7 +47,6 @@ export interface ElectronAPI {
       title?: string
     }) => Promise<{ sessionId: string }>
     getDiff: (path: string) => Promise<ProcessResult>
-    getTodo: (path: string) => Promise<ProcessResult>
   }
   project: {
     validate: (path: string) => Promise<ProjectValidationResult>

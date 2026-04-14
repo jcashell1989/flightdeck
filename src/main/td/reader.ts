@@ -71,7 +71,13 @@ export class TdReader {
     const dir = cwd ?? process.cwd()
     try {
       const out = await runTd(['usage', '--json'], dir)
-      return JSON.parse(out) as TdUsageResult
+      const raw = JSON.parse(out) as Partial<TdUsageResult> & { focused?: TdTicket | null }
+      return {
+        focused: raw.focused ?? null,
+        in_progress: raw.in_progress ?? [],
+        ready: raw.ready ?? [],
+        reviewable: raw.reviewable ?? [],
+      }
     } catch {
       return { focused: null, in_progress: [], ready: [], reviewable: [] }
     }

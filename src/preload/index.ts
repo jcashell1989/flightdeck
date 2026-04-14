@@ -62,8 +62,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       prompt: string
       title?: string
     }): Promise<{ sessionId: string }> => ipcRenderer.invoke('agent:dispatch', args),
-    getDiff: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('project:diff', path),
-    getTodo: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('project:todo', path)
+    getDiff: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('project:diff', path)
   },
   project: {
     validate: (path: string): Promise<ProjectValidationResult> =>

@@ -876,6 +876,14 @@ function TodoTab({ project, useMock }: { project: Project | null; useMock: boole
 
   useEffect(() => { void refresh() }, [refresh])
 
+  // Subscribe to push updates from file-watcher.
+  useEffect(() => {
+    const api = window.electronAPI?.td
+    if (!api?.onTdChange) return
+    const unsub = api.onTdChange(() => { void refresh() })
+    return unsub
+  }, [refresh])
+
   const sections: { label: string; tickets: TdTicket[] }[] = []
   if (data) {
     if (data.focused) sections.push({ label: 'Focused', tickets: [data.focused] })
@@ -895,6 +903,9 @@ function TodoTab({ project, useMock }: { project: Project | null; useMock: boole
         {error && <div style={{ color: 'var(--status-error)', fontSize: 11 }}>{error}</div>}
         {useMock && <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>mock mode — no td output</div>}
         {!loading && !error && !useMock && !data && <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>no td data</div>}
+        {!loading && !error && !useMock && data && sections.length === 0 && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>no tickets</div>
+        )}
         {sections.map((sec) => (
           <div key={sec.label} style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
@@ -925,7 +936,7 @@ function TodoTab({ project, useMock }: { project: Project | null; useMock: boole
 function useShellResult(
   path: string | null,
   useMock: boolean,
-  method: 'getDiff' | 'getTodo'
+  method: 'getDiff'
 ): {
   data: ProcessResult | null
   loading: boolean
