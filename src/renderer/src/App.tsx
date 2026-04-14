@@ -16,8 +16,8 @@ import { Analytics } from './views/Analytics'
 import { Settings } from './views/Settings'
 
 export function App() {
-  useTheme()
   const { config, setConfig, configError, clearConfigError } = useConfig()
+  useTheme(config?.theme)
   const { projects, connectionStatus } = useSessionService(config)
 
   const [activeView, setActiveView] = useState<View>('dashboard')

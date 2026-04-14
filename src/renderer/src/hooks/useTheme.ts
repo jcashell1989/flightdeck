@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
+import type { ThemeId } from '../../../shared/types'
 
-type Theme = 'dark' | 'light'
-
-export function useTheme(): Theme {
-  const [theme, setTheme] = useState<Theme>(() => {
+export function useTheme(themeId?: ThemeId | null): ThemeId {
+  // OS-resolved theme — always tracked so switching back to 'os' is instant.
+  const [osTheme, setOsTheme] = useState<'dark' | 'light'>(() => {
     if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
       return 'dark'
     }
@@ -11,23 +11,23 @@ export function useTheme(): Theme {
   })
 
   useEffect(() => {
-    // Electron native theme
     if (window.electronAPI) {
-      window.electronAPI.getTheme().then(setTheme)
-      const dispose = window.electronAPI.onThemeChanged(setTheme)
+      window.electronAPI.getTheme().then((t) => setOsTheme(t as 'dark' | 'light'))
+      const dispose = window.electronAPI.onThemeChanged((t) => setOsTheme(t as 'dark' | 'light'))
       return dispose
     }
-
-    // Fallback: CSS media query
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = (e: MediaQueryListEvent) => setTheme(e.matches ? 'dark' : 'light')
+    const handler = (e: MediaQueryListEvent) => setOsTheme(e.matches ? 'dark' : 'light')
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-  }, [theme])
+  // Resolved theme: explicit pin wins over OS default.
+  const resolved: ThemeId = (!themeId || themeId === 'os') ? osTheme : themeId
 
-  return theme
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', resolved)
+  }, [resolved])
+
+  return resolved
 }
