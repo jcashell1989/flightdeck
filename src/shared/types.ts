@@ -208,6 +208,21 @@ export interface CodexSnapshot {
   sessions: CodexSession[]
 }
 
+// ── td types ─────────────────────────────────────────────────────────────
+
+export interface TdTicket {
+  id: string
+  title: string
+  description: string
+  status: 'open' | 'in_progress' | 'in_review' | 'approved' | 'closed'
+  priority: string
+  type: string
+  created_at: string
+  updated_at: string
+  implementer_session: string
+  logs: Array<{ message: string; timestamp: string; type: string; session: string }>
+}
+
 // ── Analytics types ───────────────────────────────────────────────────────
 
 export interface ClaudeCodeSessionUsage {

@@ -3,15 +3,16 @@ import type {
   AgentProfile,
   AnalyticsSummary,
   AppConfig,
+  CodexSnapshot,
   CommandDefinition,
   GitStatusResult,
   MessageRecord,
   OpencodeSnapshotPayload,
   ProcessResult,
   ProjectConfig,
-  ProjectValidationResult
+  ProjectValidationResult,
+  TdTicket
 } from '../shared/types'
-import type { CodexSnapshot } from '../shared/types'
 
 contextBridge.exposeInMainWorld('electronAPI', {
   getTheme: (): Promise<'dark' | 'light'> => ipcRenderer.invoke('get-theme'),
@@ -111,6 +112,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const handler = (_e: IpcRendererEvent, snap: CodexSnapshot): void => cb(snap)
       ipcRenderer.on('codex:snapshot', handler)
       return () => ipcRenderer.removeListener('codex:snapshot', handler)
+    }
+  },
+  td: {
+    list: (cwd?: string): Promise<TdTicket[]> => ipcRenderer.invoke('td:list', cwd),
+    show: (id: string, cwd?: string): Promise<TdTicket | null> => ipcRenderer.invoke('td:show', id, cwd),
+    start: (id: string, cwd?: string): Promise<void> => ipcRenderer.invoke('td:start', id, cwd),
+    log: (id: string, message: string, cwd?: string): Promise<void> => ipcRenderer.invoke('td:log', id, message, cwd),
+    handoff: (id: string, cwd?: string): Promise<void> => ipcRenderer.invoke('td:handoff', id, cwd),
+    onTdChange: (cb: () => void): (() => void) => {
+      const handler = (): void => cb()
+      ipcRenderer.on('td:change', handler)
+      return () => ipcRenderer.removeListener('td:change', handler)
     }
   }
 })

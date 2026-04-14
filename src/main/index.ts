@@ -24,6 +24,7 @@ import * as ipcInstance from './ipc/instance'
 import * as ipcAnalytics from './ipc/analytics'
 import { analyticsMonitor } from './analytics/monitor'
 import * as ipcCodex from './ipc/codex'
+import * as ipcTd from './ipc/td'
 
 // Main is bundled as ESM (electron.vite.config.ts: format 'es'), so __dirname
 // is not defined. Resolve it from import.meta.url instead.
@@ -50,6 +51,7 @@ function registerIpc(claudeLauncher: ClaudeLauncher): void {
   ipcInstance.register(claudeLauncher)
   ipcAnalytics.register(broadcast)
   ipcCodex.register(broadcast)
+  ipcTd.register()
 }
 
 function createWindow(): void {

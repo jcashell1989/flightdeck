@@ -9,7 +9,8 @@ import type {
   OpencodeSnapshotPayload,
   ProcessResult,
   ProjectConfig,
-  ProjectValidationResult
+  ProjectValidationResult,
+  TdTicket
 } from './types'
 
 // Re-export for backward compat with earlier `import { MessageRecord } from '../electronAPI'`.
@@ -80,6 +81,14 @@ export interface ElectronAPI {
   codex: {
     getSnapshot: () => Promise<CodexSnapshot>
     onSnapshot: (cb: (snap: CodexSnapshot) => void) => () => void
+  }
+  td: {
+    list: (cwd?: string) => Promise<TdTicket[]>
+    show: (id: string, cwd?: string) => Promise<TdTicket | null>
+    start: (id: string, cwd?: string) => Promise<void>
+    log: (id: string, message: string, cwd?: string) => Promise<void>
+    handoff: (id: string, cwd?: string) => Promise<void>
+    onTdChange: (cb: () => void) => () => void
   }
 }
 

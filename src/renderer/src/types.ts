@@ -32,12 +32,13 @@ export type {
   ProjectConfig,
   ProjectValidationResult,
   Session,
-  SessionState
+  SessionState,
+  TdTicket
 } from '../../shared/types'
 
 import type { SessionState } from '../../shared/types'
 
-export type View = 'dashboard' | 'sessions' | 'projects' | 'analytics' | 'settings'
+export type View = 'dashboard' | 'sessions' | 'projects' | 'kanban' | 'analytics' | 'settings'
 
 // Attention states: anything that wants the user's eyes.
 // `idle` is here because an idle agent with no reason to be idle is a problem.
