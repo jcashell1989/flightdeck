@@ -31,7 +31,8 @@ function baseConfig(profiles: AgentProfile[] = []): AppConfig {
     mock: { enabled: true },
     http: { enabled: false, bindAddress: '0.0.0.0', port: 4097, token: '' },
     projects: [],
-    profiles
+    profiles,
+    theme: 'dark'
   }
 }
 
@@ -361,6 +362,7 @@ describe('toPersisted / fromPersisted', () => {
       mock: { enabled: true },
       http: { enabled: false, bindAddress: '0.0.0.0', port: 4097, token: '' },
       projects: [],
+      theme: 'dark' as const,
       profiles: [
         {
           id: 'p1',
@@ -393,6 +395,7 @@ describe('toPersisted / fromPersisted', () => {
       mock: { enabled: true },
       http: { enabled: false, bindAddress: '0.0.0.0', port: 4097, token: '' },
       projects: [],
+      theme: 'dark' as const,
       profiles: [
         {
           id: 'p1',

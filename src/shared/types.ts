@@ -11,6 +11,8 @@
 
 // ── Config types ──────────────────────────────────────────────────────────
 
+export type ThemeId = 'os' | 'dark' | 'light' | 'tokyo-night' | 'catppuccin-mocha' | 'nord'
+
 export interface OpencodeInstance {
   host: string
   port: number
@@ -72,6 +74,7 @@ export interface AppConfig {
   http: HttpConfig
   projects: ProjectConfig[]
   profiles: AgentProfile[]
+  theme: ThemeId
 }
 
 // ── Session / snapshot types ──────────────────────────────────────────────
