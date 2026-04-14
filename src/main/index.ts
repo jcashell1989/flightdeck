@@ -52,7 +52,7 @@ function registerIpc(claudeLauncher: ClaudeLauncher): void {
   ipcInstance.register(claudeLauncher)
   ipcAnalytics.register(broadcast)
   ipcCodex.register(broadcast)
-  ipcTd.register()
+  ipcTd.register(broadcast)
 }
 
 function createWindow(): void {
@@ -264,6 +264,7 @@ app.on('before-quit', (event) => {
     try {
       adapterRegistry.dispose()
       analyticsMonitor.dispose()
+      ipcTd.dispose()
       flightDeckDb.close()
       await Promise.all([
         opencodeHttpAdapter.getLauncher().stopAllAsync(),

@@ -40,18 +40,24 @@ export function useTd(cwd?: string) {
   }, [cwd])
 
   const start = useCallback(async (id: string) => {
-    await window.electronAPI?.td?.start(id, cwd)
-    await refresh()
+    try {
+      await window.electronAPI?.td?.start(id, cwd)
+      await refresh()
+    } catch (e) { setError(String(e)) }
   }, [cwd, refresh])
 
   const log = useCallback(async (id: string, message: string) => {
-    await window.electronAPI?.td?.log(id, message, cwd)
-    await refresh()
+    try {
+      await window.electronAPI?.td?.log(id, message, cwd)
+      await refresh()
+    } catch (e) { setError(String(e)) }
   }, [cwd, refresh])
 
   const handoff = useCallback(async (id: string) => {
-    await window.electronAPI?.td?.handoff(id, cwd)
-    await refresh()
+    try {
+      await window.electronAPI?.td?.handoff(id, cwd)
+      await refresh()
+    } catch (e) { setError(String(e)) }
   }, [cwd, refresh])
 
   useEffect(() => {
@@ -65,9 +71,9 @@ export function useTd(cwd?: string) {
     return unsub
   }, [refresh])
 
-  // Auto-refresh every 10 seconds
+  // Auto-refresh every 30 seconds
   useEffect(() => {
-    const id = setInterval(() => { void refresh() }, 10_000)
+    const id = setInterval(() => { void refresh() }, 30_000)
     return () => clearInterval(id)
   }, [refresh])
 

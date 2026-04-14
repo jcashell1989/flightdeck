@@ -23,6 +23,7 @@ function runTd(args: string[], cwd: string): Promise<string> {
     let err = ''
     proc.stdout.on('data', (d: Buffer) => { out += d.toString() })
     proc.stderr.on('data', (d: Buffer) => { err += d.toString() })
+    proc.on('error', (e: Error) => reject(e))
     proc.on('close', (code: number) => {
       if (code !== 0) reject(new Error(err || `td exited ${code}`))
       else resolve(out)
