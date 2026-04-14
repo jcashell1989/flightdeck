@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import type { TdUsageResult } from '../../shared/types'
 
 export interface TdTicket {
   id: string
@@ -63,6 +64,16 @@ export class TdReader {
   async handoff(id: string, cwd?: string): Promise<void> {
     const dir = cwd ?? process.cwd()
     await runTd(['handoff', id], dir)
+  }
+
+  async usage(cwd?: string): Promise<TdUsageResult> {
+    const dir = cwd ?? process.cwd()
+    try {
+      const out = await runTd(['usage', '--json'], dir)
+      return JSON.parse(out) as TdUsageResult
+    } catch {
+      return { focused: null, in_progress: [], ready: [], reviewable: [] }
+    }
   }
 
   watchStateDir(onChange: () => void, cwd?: string): () => void {

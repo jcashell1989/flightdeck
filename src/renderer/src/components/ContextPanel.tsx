@@ -5,6 +5,9 @@ import type { MessageRecord, ProcessResult } from '../electronAPI'
 import { useSessionDetail } from '../hooks/useSessionDetail'
 import { parseSlashCommand } from '../../../shared/commandParser'
 import { CommandPalette, type CommandPaletteHandle } from './CommandPalette'
+import { TicketCard } from './TicketCard'
+import { TicketDetail } from './TicketDetail'
+import type { TdTicket, TdUsageResult } from '../../../shared/types'
 
 interface ContextPanelProps {
   session: Session | null
@@ -833,49 +836,88 @@ function diffLineColor(line: string): string {
 // ─── Todo Tab ─────────────────────────────────────────────────────────────
 
 function TodoTab({ project, useMock }: { project: Project | null; useMock: boolean }) {
-  const result = useShellResult(project?.path ?? null, useMock, 'getTodo')
+  const [data, setData] = useState<TdUsageResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<TdTicket | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  const refresh = useCallback(async () => {
+    if (useMock || !project?.path) return
+    const api = window.electronAPI?.td
+    if (!api) return
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await api.usage(project.path)
+      setData(result)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [project?.path, useMock])
+
+  const loadDetail = useCallback(async (id: string) => {
+    const api = window.electronAPI?.td
+    if (!api) return
+    setSelectedId(id)
+    setDetailLoading(true)
+    try {
+      const t = await api.show(id, project?.path)
+      setDetail(t)
+    } catch {
+      setDetail(null)
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [project?.path])
+
+  useEffect(() => { void refresh() }, [refresh])
+
+  const sections: { label: string; tickets: TdTicket[] }[] = []
+  if (data) {
+    if (data.focused) sections.push({ label: 'Focused', tickets: [data.focused] })
+    if (data.in_progress.length) sections.push({ label: 'In Progress', tickets: data.in_progress })
+    if (data.reviewable.length) sections.push({ label: 'Review', tickets: data.reviewable })
+    if (data.ready.length) sections.push({ label: 'Ready', tickets: data.ready })
+  }
+
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <div
-        style={{
-          padding: '6px 12px',
-          borderBottom: '1px solid var(--border)',
-          display: 'flex',
-          justifyContent: 'flex-end',
-          flexShrink: 0
-        }}
-      >
-        <button onClick={result.refresh} style={headerBtn}>
-          Refresh
-        </button>
-      </div>
-      <div style={{ flex: 1, overflow: 'auto', padding: 12, minHeight: 0 }}>
-        {result.loading && (
-          <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>running td…</div>
-        )}
-        {result.error && (
-          <div style={{ color: 'var(--status-error)', fontSize: 11 }}>{result.error}</div>
-        )}
-        {useMock && (
-          <div style={{ color: 'var(--fg-subtle)', fontSize: 11, marginBottom: 8 }}>
-            mock mode — no live td output
+    <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      {/* Ticket list */}
+      <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button onClick={() => void refresh()} style={headerBtn}>Refresh</button>
+        </div>
+        {loading && <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>loading…</div>}
+        {error && <div style={{ color: 'var(--status-error)', fontSize: 11 }}>{error}</div>}
+        {useMock && <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>mock mode — no td output</div>}
+        {!loading && !error && !useMock && !data && <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>no td data</div>}
+        {sections.map((sec) => (
+          <div key={sec.label} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+              {sec.label}
+            </div>
+            {sec.tickets.map((t) => (
+              <TicketCard key={t.id} ticket={t} selected={t.id === selectedId} onClick={loadDetail} />
+            ))}
           </div>
-        )}
-        {result.data && (
-          <pre
-            className="mono"
-            style={{
-              fontSize: 11,
-              lineHeight: 1.4,
-              margin: 0,
-              color: 'var(--fg-primary)',
-              whiteSpace: 'pre-wrap'
-            }}
-          >
-            {result.data.stdout || result.data.stderr || '(no output)'}
-          </pre>
-        )}
+        ))}
       </div>
+      {/* Detail panel */}
+      {selectedId && (
+        <div style={{ width: 260, flexShrink: 0, borderLeft: '1px solid var(--border)', overflow: 'auto' }}>
+          <TicketDetail
+            ticket={detail}
+            loading={detailLoading}
+            onStart={async (id) => { await window.electronAPI?.td?.start(id, project?.path); void refresh() }}
+            onHandoff={async (id) => { await window.electronAPI?.td?.handoff(id, project?.path); void refresh() }}
+            onLog={async (id, msg) => { await window.electronAPI?.td?.log(id, msg, project?.path); void refresh() }}
+          />
+        </div>
+      )}
     </div>
   )
 }

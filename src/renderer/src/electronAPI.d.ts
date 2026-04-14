@@ -10,7 +10,8 @@ import type {
   ProcessResult,
   ProjectConfig,
   ProjectValidationResult,
-  TdTicket
+  TdTicket,
+  TdUsageResult
 } from './types'
 
 // Re-export for backward compat with earlier `import { MessageRecord } from '../electronAPI'`.
@@ -88,6 +89,7 @@ export interface ElectronAPI {
     start: (id: string, cwd?: string) => Promise<void>
     log: (id: string, message: string, cwd?: string) => Promise<void>
     handoff: (id: string, cwd?: string) => Promise<void>
+    usage: (cwd?: string) => Promise<TdUsageResult>
     onTdChange: (cb: () => void) => () => void
   }
 }

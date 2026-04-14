@@ -223,6 +223,13 @@ export interface TdTicket {
   logs: Array<{ message: string; timestamp: string; type: string; session: string }>
 }
 
+export interface TdUsageResult {
+  focused: TdTicket | null
+  in_progress: TdTicket[]
+  ready: TdTicket[]
+  reviewable: TdTicket[]
+}
+
 // ── Analytics types ───────────────────────────────────────────────────────
 
 export interface ClaudeCodeSessionUsage {

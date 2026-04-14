@@ -33,7 +33,8 @@ export type {
   ProjectValidationResult,
   Session,
   SessionState,
-  TdTicket
+  TdTicket,
+  TdUsageResult
 } from '../../shared/types'
 
 import type { SessionState } from '../../shared/types'

@@ -11,7 +11,8 @@ import type {
   ProcessResult,
   ProjectConfig,
   ProjectValidationResult,
-  TdTicket
+  TdTicket,
+  TdUsageResult
 } from '../shared/types'
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -120,6 +121,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     start: (id: string, cwd?: string): Promise<void> => ipcRenderer.invoke('td:start', id, cwd),
     log: (id: string, message: string, cwd?: string): Promise<void> => ipcRenderer.invoke('td:log', id, message, cwd),
     handoff: (id: string, cwd?: string): Promise<void> => ipcRenderer.invoke('td:handoff', id, cwd),
+    usage: (cwd?: string): Promise<TdUsageResult> => ipcRenderer.invoke('td:usage', cwd),
     onTdChange: (cb: () => void): (() => void) => {
       const handler = (): void => cb()
       ipcRenderer.on('td:change', handler)
