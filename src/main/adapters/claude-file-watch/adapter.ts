@@ -35,8 +35,8 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
   private monitor: ClaudeMonitor
   private launcher: ClaudeLauncher | null = null
 
-  /** pids that flight deck launched (via trackLaunchedSession) */
-  private launchedPids = new Set<number>()
+  /** sessionIds that flight deck has ever launched — never cleared (pid reuse safe). */
+  private launchedSessions = new Set<string>()
 
   /** Per-session FIFO send queue — errors don't poison subsequent turns. */
   private sessionQueues = new Map<string, Promise<void>>()
@@ -55,12 +55,10 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
     this.launcher = launcher
     // Track every pid the launcher starts so we can distinguish flight-deck
     // sessions from externally-launched ones.
-    launcher.on('started', ({ pid }: { pid: number }) => {
-      this.launchedPids.add(pid)
+    launcher.on('started', ({ sessionId }: { sessionId: string }) => {
+      this.launchedSessions.add(sessionId)
     })
-    launcher.on('stopped', ({ pid }: { pid: number }) => {
-      this.launchedPids.delete(pid)
-    })
+    // No removal — once flight-deck owns a session, it owns it for process lifetime.
   }
 
   start(): void {
@@ -73,7 +71,7 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
     this.monitor.dispose()
     this.sessionQueues.clear()
     this.sessionLogs.clear()
-    this.launchedPids.clear()
+    this.launchedSessions.clear()
     this.removeAllListeners()
   }
 
@@ -116,8 +114,8 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
   async abort(sessionId: string): Promise<void> {
     if (!this.launcher) throw new Error('ClaudeFileWatchAdapter: launcher not wired')
     await this.launcher.killSession(sessionId)
-    // Clear the queue entry so stale sends don't fire after abort.
     this.sessionQueues.delete(sessionId)
+    this.sessionLogs.delete(sessionId)
   }
 
   /**
@@ -209,7 +207,7 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
     // NOT launch, refuse and tell the user to reply from their terminal.
     const processes = this.monitor.getProcesses()
     for (const entry of processes.values()) {
-      if (entry.sessionId === sessionId && !this.launchedPids.has(entry.pid)) {
+      if (entry.sessionId === sessionId && !this.launchedSessions.has(sessionId)) {
         throw new Error(
           `Session ${sessionId} is owned by an external claude process (pid ${entry.pid}). Reply from that terminal instead.`
         )
@@ -248,6 +246,10 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
       cwd,
       startedAt: Date.now()
     })
+
+    // Wait for this turn's subprocess to exit before the queue resolves.
+    // This ensures the next queued send doesn't start while claude is still running.
+    await result.done
   }
 
   private getCwd(sessionId: string): string | undefined {

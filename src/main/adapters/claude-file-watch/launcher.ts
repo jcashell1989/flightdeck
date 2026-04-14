@@ -56,6 +56,7 @@ function killChild(child: ChildProcess, graceMs = KILL_GRACE_MS): Promise<void> 
 export interface ClaudeLaunchResult {
   sessionId: string
   pid: number
+  done: Promise<void>
 }
 
 interface ManagedEntry {
@@ -338,6 +339,12 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
             }
             this.instances.set(key, entry)
 
+            // done resolves when this resume subprocess exits.
+            // Created before resolve() so the caller can await it race-free.
+            const done = new Promise<void>((resolveDone) => {
+              child.once('exit', () => resolveDone())
+            })
+
             child.on('exit', (code) => {
               this.instances.delete(key)
               this.emit('stopped', { profileId: profile.id, directory, sessionId, code })
@@ -349,7 +356,7 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
             })
 
             this.emit('started', { sessionId, directory, profileId: profile.id, pid })
-            resolve({ sessionId, pid })
+            resolve({ sessionId, pid, done })
             child.stdout?.removeAllListeners('data')
             buffer = ''
           }
