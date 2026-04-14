@@ -61,13 +61,14 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
       sessions: claudeProject.sessions.map((s) => ({
         id: s.sessionId,
         agentType: 'claude-code' as const,
-        state: s.state as 'running' | 'idle' | 'error',
+        state: s.state as 'running' | 'idle' | 'error' | 'question',
         currentAction: s.currentAction,
         startedAt: s.startedAt,
         lastActivity: s.lastActivity,
         projectId: claudeProject.path,
         instanceKey: `claude:${s.pid}`,
-        pendingPermission: null
+        pendingPermission: null,
+        ...(s.statusLine !== undefined ? { statusLine: s.statusLine } : {})
       }))
     }
   }

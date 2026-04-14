@@ -258,6 +258,7 @@ export class ClaudeMonitor extends EventEmitter {
     let state: ClaudeSession['state'] = 'idle'
     let currentAction = '◌ idle'
     let lastActivity = entry.startedAt
+    let statusLine: string | undefined
 
     if (jsonlPath) {
       const parsed = await parseSessionState(jsonlPath, entry.startedAt)
@@ -265,6 +266,7 @@ export class ClaudeMonitor extends EventEmitter {
         state = parsed.state
         currentAction = parsed.currentAction
         lastActivity = parsed.lastActivity
+        statusLine = parsed.statusLine
       }
     } else {
       // No JSONL yet — session just started.
@@ -286,7 +288,8 @@ export class ClaudeMonitor extends EventEmitter {
       startedAt: entry.startedAt,
       state,
       currentAction,
-      lastActivity
+      lastActivity,
+      ...(statusLine !== undefined ? { statusLine } : {})
     }
 
     // Only emit if something changed.
@@ -294,7 +297,8 @@ export class ClaudeMonitor extends EventEmitter {
       !prev ||
       prev.state !== next.state ||
       prev.currentAction !== next.currentAction ||
-      prev.lastActivity !== next.lastActivity
+      prev.lastActivity !== next.lastActivity ||
+      prev.statusLine !== next.statusLine
     ) {
       this.sessions.set(entry.sessionId, next)
       this.emit('change')

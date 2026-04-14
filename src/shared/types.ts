@@ -113,6 +113,8 @@ export interface Session {
   canCommand?: boolean
   /** Whether the session can be aborted. */
   canAbort?: boolean
+  /** Last end_turn text content, truncated to 120 chars with newlines collapsed. */
+  statusLine?: string
 }
 
 export interface Project {

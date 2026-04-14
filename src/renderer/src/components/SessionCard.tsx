@@ -163,6 +163,21 @@ export function SessionCard({ session, focused, onClick }: SessionCardProps) {
         {ACTION_ICONS[session.state]} {session.currentAction}
       </div>
 
+      {/* Status line: last end_turn text snippet */}
+      {session.statusLine && (
+        <div
+          style={{
+            fontSize: 11,
+            color: 'var(--fg-subtle)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {session.statusLine}
+        </div>
+      )}
+
       {/* Status row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
         <span style={{ fontWeight: 500, color: `var(--status-${session.state})` }}>

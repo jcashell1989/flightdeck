@@ -42,6 +42,7 @@ export interface ParseResult {
   state: ClaudeSessionState
   currentAction: string
   lastActivity: number
+  statusLine?: string
 }
 
 /**
@@ -143,13 +144,19 @@ export async function parseSessionState(
 
     if (stopReason === 'tool_use') {
       // Agent is mid-turn, actively using a tool.
-      state = 'running'
       const content = msg?.content ?? []
       const toolUse = content.find(
-        (c): c is { type: string; name: string } =>
+        (c): c is { type: string; name: string; input?: unknown } =>
           typeof c === 'object' && c !== null && (c as { type?: string }).type === 'tool_use'
       )
-      currentAction = toolUse ? toolLabel(toolUse.name) : '⚙ working…'
+      if (toolUse?.name === 'AskUserQuestion') {
+        state = 'question'
+        const questionText = (toolUse.input as { question?: string }).question ?? ''
+        currentAction = '? ' + questionText.slice(0, 80).replace(/\n/g, ' ')
+      } else {
+        state = 'running'
+        currentAction = toolUse ? toolLabel(toolUse.name) : '⚙ working…'
+      }
     } else if (stopReason === 'end_turn') {
       // Turn completed. Check if a user message came after (agent about to start).
       if (lastUserIdx > lastAssistantIdx) {
@@ -184,7 +191,26 @@ export async function parseSessionState(
     currentAction = '◌ idle'
   }
 
-  return { state, currentAction, lastActivity }
+  // Extract statusLine: last assistant end_turn entry with text content.
+  let statusLine: string | undefined
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i]
+    if (e.type !== 'assistant') continue
+    const m = e.message as { stop_reason?: string; content?: unknown[] } | undefined
+    if (m?.stop_reason !== 'end_turn') continue
+    const content = (m.content ?? []) as Array<{ type?: string; text?: string }>
+    // Walk content backwards to find last text block.
+    for (let j = content.length - 1; j >= 0; j--) {
+      const block = content[j]
+      if (block.type === 'text' && block.text) {
+        statusLine = block.text.slice(0, 120).replace(/\n/g, ' ')
+        break
+      }
+    }
+    if (statusLine !== undefined) break
+  }
+
+  return { state, currentAction, lastActivity, statusLine }
 }
 
 /**

@@ -33,6 +33,7 @@ export interface NormalizedSession {
   projectId: string
   instanceKey: string
   pendingPermission?: PendingPermission | null
+  statusLine?: string
 }
 
 export interface NormalizedProject {
