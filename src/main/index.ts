@@ -157,11 +157,8 @@ app.whenReady().then(async () => {
 
   // Config must be loaded before any IPC handler can read it.
   await configStore.init()
-  try {
-    flightDeckDb.open(join(app.getPath('userData'), 'flightdeck.db'))
-  } catch (e) {
-    console.error('[main] FlightDeckDb failed to open (non-fatal):', e)
-  }
+  await flightDeckDb.open(join(app.getPath('userData'), 'flightdeck.db'))
+  adapterRegistry.loadHistory()
   claudeLauncher = await ClaudeLauncher.create()
   const launcher = claudeLauncher
   // Register IPC AFTER init so handlers never hit an un-initialised store,

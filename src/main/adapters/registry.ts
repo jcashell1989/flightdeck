@@ -14,34 +14,97 @@ export class AdapterRegistry extends EventEmitter {
   private disposed = false
   private db: FlightDeckDb | null
 
+  /** Historical sessions loaded once at startup — never re-fetched. */
+  private historicalOverlay: NormalizedProject[] = []
+  /** IDs of historical sessions — used to skip them in persistSnapshot. */
+  private historicalIds = new Set<string>()
+
+  private _persistTimer: ReturnType<typeof setTimeout> | null = null
+
   constructor(db: FlightDeckDb | null = null) {
     super()
     this.db = db
+  }
+
+  /** Call once at startup after DB is open to populate the historical overlay. */
+  loadHistory(): void {
+    if (!this.db) return
+    const records = this.db.getRecentSessions()
+    const projectMap = new Map<string, NormalizedProject>()
+    for (const rec of records) {
+      let proj = projectMap.get(rec.projectPath)
+      if (!proj) {
+        proj = {
+          id: rec.projectId,
+          name: rec.projectPath.split('/').pop() ?? rec.projectPath,
+          path: rec.projectPath,
+          sessions: []
+        }
+        projectMap.set(rec.projectPath, proj)
+      }
+      proj.sessions.push({
+        id: rec.id,
+        agentType: rec.agentType as 'opencode' | 'claude-code' | 'codex',
+        state: 'idle' as const,
+        currentAction: '◌ historical',
+        startedAt: rec.startedAt,
+        lastActivity: rec.lastActivity,
+        projectId: rec.projectId,
+        instanceKey: 'historical',
+      })
+      this.historicalIds.add(rec.id)
+    }
+    this.historicalOverlay = Array.from(projectMap.values())
   }
 
   register(adapter: Adapter): void {
     this.adapters.push(adapter)
     adapter.on('change', () => {
       this.emit('change')
-      this.persistSnapshot()
+      this.schedulePersist()
     })
   }
 
-  private persistSnapshot(): void {
-    if (!this.db) return
+  private schedulePersist(): void {
+    if (!this.db || this.disposed) return
+    if (this._persistTimer) clearTimeout(this._persistTimer)
+    this._persistTimer = setTimeout(() => {
+      this._persistTimer = null
+      this.flushPersist()
+    }, 500)
+  }
+
+  private flushPersist(): void {
+    if (!this.db || this.disposed) return
     const snap = this.snapshot()
+    // Collect live session IDs — skip historical rows (they're in historicalIds).
+    const liveSessionIds = new Set<string>()
     for (const p of snap.projects) {
       for (const s of p.sessions) {
-        this.db.upsertSession({
-          id: s.id,
-          agentType: s.agentType,
-          projectId: p.id ?? p.path,
-          projectPath: p.path,
-          state: s.state,
-          startedAt: s.startedAt,
-          lastActivity: s.lastActivity
-        } as SessionRecord)
+        if (!this.historicalIds.has(s.id)) liveSessionIds.add(s.id)
       }
+    }
+    // Batch all upserts in a single transaction.
+    try {
+      this.db.exec('BEGIN')
+      for (const p of snap.projects) {
+        for (const s of p.sessions) {
+          if (!liveSessionIds.has(s.id)) continue // skip historical
+          this.db.upsertSession({
+            id: s.id,
+            agentType: s.agentType,
+            projectId: p.id ?? p.path,
+            projectPath: p.path,
+            state: s.state,
+            startedAt: s.startedAt,
+            lastActivity: s.lastActivity
+          } as SessionRecord)
+        }
+      }
+      this.db.exec('COMMIT')
+    } catch (err) {
+      try { this.db.exec('ROLLBACK') } catch { /* ignore */ }
+      console.warn('[AdapterRegistry] persistSnapshot error:', err)
     }
   }
 
@@ -51,6 +114,7 @@ export class AdapterRegistry extends EventEmitter {
 
   dispose(): void {
     this.disposed = true
+    if (this._persistTimer) { clearTimeout(this._persistTimer); this._persistTimer = null }
     for (const a of this.adapters) a.dispose()
     this.removeAllListeners()
   }
@@ -120,33 +184,18 @@ export class AdapterRegistry extends EventEmitter {
       })
     }))
 
-    // Hydrate from DB: add historical sessions not currently live.
-    if (this.db) {
-      const historical = this.db.getRecentSessions()
-      for (const rec of historical) {
-        if (seenSessionIds.has(rec.id)) continue  // already live
-        // Find or create the project entry
-        let proj = stampedProjects.find(p => p.path === rec.projectPath)
-        if (!proj) {
-          proj = {
-            id: rec.projectId,
-            name: rec.projectPath.split('/').pop() ?? rec.projectPath,
-            path: rec.projectPath,
-            sessions: []
-          }
-          stampedProjects.push(proj)
+    // Merge historical overlay — sessions not currently live.
+    for (const hp of this.historicalOverlay) {
+      let proj = stampedProjects.find(p => p.path === hp.path)
+      if (!proj) {
+        proj = { ...hp, sessions: [] }
+        stampedProjects.push(proj)
+      }
+      for (const hs of hp.sessions) {
+        if (!seenSessionIds.has(hs.id)) {
+          proj.sessions.push(hs)
+          seenSessionIds.add(hs.id)
         }
-        proj.sessions.push({
-          id: rec.id,
-          agentType: rec.agentType as 'opencode' | 'claude-code' | 'codex',
-          state: 'idle' as const,
-          currentAction: '◌ historical',
-          startedAt: rec.startedAt,
-          lastActivity: rec.lastActivity,
-          projectId: rec.projectId,
-          instanceKey: 'historical',
-        })
-        seenSessionIds.add(rec.id)
       }
     }
 
