@@ -42,7 +42,7 @@ export function ContextPanel({
   return (
     <div
       style={{
-        flex: fullScreen ? '1 1 100%' : 2,
+        flex: fullScreen ? '1 1 100%' : '2 1 0%',
         minWidth: 0,
         borderLeft: '1px solid var(--border)',
         backgroundColor: 'var(--bg-panel)',
