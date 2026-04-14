@@ -2,11 +2,21 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as QRCode from 'qrcode'
 import { AgentProfile, AppConfig, OpencodeInstance } from '../types'
+import type { ThemeId } from '../../../shared/types'
 
 interface SettingsProps {
   config: AppConfig | null
   setConfig: (patch: Partial<AppConfig>) => Promise<boolean>
 }
+
+const THEME_OPTIONS: { id: ThemeId; label: string }[] = [
+  { id: 'os', label: 'OS default' },
+  { id: 'dark', label: 'Dark (cleo)' },
+  { id: 'light', label: 'Light (cleo)' },
+  { id: 'tokyo-night', label: 'Tokyo Night' },
+  { id: 'catppuccin-mocha', label: 'Catppuccin Mocha' },
+  { id: 'nord', label: 'Nord' },
+]
 
 export function Settings({ config, setConfig }: SettingsProps) {
   if (!config) {
@@ -29,6 +39,30 @@ export function Settings({ config, setConfig }: SettingsProps) {
   return (
     <div style={{ maxWidth: 640 }}>
       <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: 24 }}>Settings</h2>
+
+      <Section title="Appearance">
+        <Row>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+            Theme
+            <select
+              value={config.theme ?? 'dark'}
+              onChange={(e) => setConfig({ theme: e.target.value as ThemeId })}
+              style={{
+                background: 'var(--bg-element)',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                color: 'var(--fg-primary)',
+                fontSize: 13,
+                padding: '3px 6px',
+              }}
+            >
+              {THEME_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
+        </Row>
+      </Section>
 
       <Section title="Mock data">
         <Row>
