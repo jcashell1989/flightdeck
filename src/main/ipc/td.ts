@@ -1,5 +1,6 @@
 import { safeHandle } from './_helpers'
 import { tdReader } from '../td/reader'
+import { TD_DEFAULT_WATCH_KEY } from '../../shared/td'
 
 type TdWatcherEntry = {
   refCount: number
@@ -7,9 +8,7 @@ type TdWatcherEntry = {
 }
 
 function watcherKey(cwd?: string): string {
-  // Null-byte prefix cannot appear in valid filesystem paths, so this sentinel
-  // is collision-safe for the undefined/default cwd bucket.
-  return cwd ? `cwd:${cwd}` : '\0default'
+  return cwd ? `cwd:${cwd}` : TD_DEFAULT_WATCH_KEY
 }
 
 export function createTdWatchManager(

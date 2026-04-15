@@ -14,12 +14,12 @@ import type {
   TdTicket,
   TdUsageResult
 } from '../shared/types'
+import { TD_DEFAULT_WATCH_KEY } from '../shared/td'
 
 const tdWatchOps = new Map<string, Promise<unknown>>()
 
 function queueTdWatchOp(cwd: string | undefined, channel: 'td:watch' | 'td:unwatch'): void {
-  // Null-byte prefix sentinel prevents collisions with real filesystem paths.
-  const key = cwd ?? '\0default'
+  const key = cwd ?? TD_DEFAULT_WATCH_KEY
   const previous = tdWatchOps.get(key) ?? Promise.resolve()
   const next = previous
     .catch(() => undefined)
