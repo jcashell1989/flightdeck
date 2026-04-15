@@ -9,7 +9,7 @@ type TdWatcherEntry = {
 const _tdWatchers = new Map<string, TdWatcherEntry>()
 
 function watcherKey(cwd?: string): string {
-  return cwd ?? '__default__'
+  return cwd ? `cwd:${cwd}` : '\0default'
 }
 
 export function register(broadcast: (channel: string, payload: unknown) => void): void {

@@ -17,13 +17,17 @@ interface KanbanViewProps {
 
 export function KanbanView({ cwd }: KanbanViewProps) {
   const { tickets, loading, error, refresh, selectedId, detail, detailLoading, loadDetail, start, log, handoff } = useTd(cwd)
-  const ticketsByStatus = useMemo<Record<TdTicket['status'], TdTicket[]>>(() => ({
-    open: tickets.filter((t) => t.status === 'open'),
-    in_progress: tickets.filter((t) => t.status === 'in_progress'),
-    in_review: tickets.filter((t) => t.status === 'in_review'),
-    approved: tickets.filter((t) => t.status === 'approved'),
-    closed: tickets.filter((t) => t.status === 'closed'),
-  }), [tickets])
+  const ticketsByStatus = useMemo<Record<TdTicket['status'], TdTicket[]>>(() => {
+    const grouped: Record<TdTicket['status'], TdTicket[]> = {
+      open: [],
+      in_progress: [],
+      in_review: [],
+      approved: [],
+      closed: [],
+    }
+    for (const ticket of tickets) grouped[ticket.status].push(ticket)
+    return grouped
+  }, [tickets])
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>

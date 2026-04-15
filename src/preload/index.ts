@@ -15,6 +15,20 @@ import type {
   TdUsageResult
 } from '../shared/types'
 
+const tdWatchOps = new Map<string, Promise<unknown>>()
+
+function queueTdWatchOp(cwd: string | undefined, channel: 'td:watch' | 'td:unwatch'): void {
+  const key = cwd ?? '\0default'
+  const previous = tdWatchOps.get(key) ?? Promise.resolve()
+  const next = previous
+    .catch(() => undefined)
+    .then(() => ipcRenderer.invoke(channel, cwd))
+    .finally(() => {
+      if (tdWatchOps.get(key) === next) tdWatchOps.delete(key)
+    })
+  tdWatchOps.set(key, next)
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   getTheme: (): Promise<'dark' | 'light'> => ipcRenderer.invoke('get-theme'),
   onThemeChanged: (callback: (theme: 'dark' | 'light') => void): (() => void) => {
@@ -122,15 +136,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     handoff: (id: string, cwd?: string): Promise<void> => ipcRenderer.invoke('td:handoff', id, cwd),
     usage: (cwd?: string): Promise<TdUsageResult> => ipcRenderer.invoke('td:usage', cwd),
     onTdChange: (cwd: string | undefined, cb: () => void): (() => void) => {
-      void ipcRenderer.invoke('td:watch', cwd)
       const expectedCwd = cwd ?? null
       const handler = (_event: IpcRendererEvent, payload?: { cwd?: string | null }): void => {
         if ((payload?.cwd ?? null) === expectedCwd) cb()
       }
       ipcRenderer.on('td:change', handler)
+      queueTdWatchOp(cwd, 'td:watch')
       return () => {
         ipcRenderer.removeListener('td:change', handler)
-        void ipcRenderer.invoke('td:unwatch', cwd)
+        queueTdWatchOp(cwd, 'td:unwatch')
       }
     }
   }

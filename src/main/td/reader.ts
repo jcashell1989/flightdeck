@@ -18,17 +18,38 @@ function runTd(args: string[], cwd: string): Promise<string> {
   })
 }
 
+function parseTdJson<T>(raw: string, context: string): T {
+  try {
+    return JSON.parse(raw) as T
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e)
+    throw new Error(`${context}: ${detail}`)
+  }
+}
+
 export class TdReader {
   async list(cwd?: string): Promise<TdTicket[]> {
     const dir = cwd ?? process.cwd()
-    const out = await runTd(['list', '--format', 'json'], dir)
-    return JSON.parse(out) as TdTicket[]
+    let out: string
+    try {
+      out = await runTd(['list', '--format', 'json'], dir)
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e)
+      throw new Error(`td list failed: ${detail}`)
+    }
+    return parseTdJson<TdTicket[]>(out, 'failed to parse td list output')
   }
 
   async show(id: string, cwd?: string): Promise<TdTicket | null> {
     const dir = cwd ?? process.cwd()
-    const out = await runTd(['show', id, '--format', 'json'], dir)
-    return JSON.parse(out) as TdTicket
+    let out: string
+    try {
+      out = await runTd(['show', id, '--format', 'json'], dir)
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e)
+      throw new Error(`td show failed for ${id}: ${detail}`)
+    }
+    return parseTdJson<TdTicket>(out, `failed to parse td show output for ${id}`)
   }
 
   async start(id: string, cwd?: string): Promise<void> {
