@@ -1,4 +1,7 @@
+# Agent/tooling state — local only, never commit
 .todos/
+.omc/
+.claude/
 .sidecar/
 .sidecar-agent
 .sidecar-task
@@ -6,11 +9,19 @@
 .sidecar-start.sh
 .sidecar-base
 .td-root
+.ruff_cache/
 
-# Build
+# Private/sensitive files
+competitive-analysis.md
+
+# Build artifacts
 node_modules/
 out/
 dist/
 
 # OS
 .DS_Store
+*.DS_Store
+
+# Electron packaged output
+release/
