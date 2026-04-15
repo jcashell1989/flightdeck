@@ -45,8 +45,11 @@ export function Settings({ config, setConfig }: SettingsProps) {
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
             Theme
             <select
-              value={config.theme ?? 'dark'}
-              onChange={(e) => setConfig({ theme: e.target.value as ThemeId })}
+              value={config.theme}
+              onChange={(e) => {
+                const opt = THEME_OPTIONS.find((o) => o.id === e.target.value)
+                if (opt) setConfig({ theme: opt.id })
+              }}
               style={{
                 background: 'var(--bg-element)',
                 border: '1px solid var(--border)',

@@ -1,3 +1,37 @@
+/* Fallback: no-flash baseline when data-theme is missing (e.g. first render
+   before useTheme resolves, or unknown theme id). Mirrors the dark palette so
+   unstyled content blends rather than showing transparent panels. */
+:root {
+  --bg-base:        #1D1912;
+  --bg-panel:       #2A2420;
+  --bg-element:     #3A342A;
+  --fg-primary:     #F5F0E8;
+  --fg-muted:       #D6D3CE;
+  --fg-subtle:      #6B6256;
+  --border:         #3A342A;
+  --border-active:  #5A5347;
+
+  --accent:         #C9A54E;
+  --accent-hover:   #D4AF5A;
+
+  --status-running:  #5B8A5C;
+  --status-idle:     #4F473B;
+  --status-approval: #D4AF5A;
+  --status-question: #556F7C;
+  --status-review:   #910766;
+  --status-error:    #B05050;
+
+  --tint-approval:  rgba(212, 175, 90,  0.05);
+  --tint-question:  rgba(85,  111, 124, 0.06);
+  --tint-review:    rgba(145, 7,   102, 0.05);
+  --tint-error:     rgba(176, 80,  80,  0.06);
+
+  --border-approval: #D4AF5A;
+  --border-question: #556F7C;
+  --border-review:   #910766;
+  --border-error:    #B05050;
+}
+
 :root[data-theme="dark"] {
   --bg-base:        #1D1912;
   --bg-panel:       #2A2420;

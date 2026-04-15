@@ -55,6 +55,9 @@ function registerIpc(claudeLauncher: ClaudeLauncher): void {
   ipcTd.register(broadcast)
 }
 
+// SYNC NOTE: these --bg-base values must match the corresponding data-theme
+// blocks in src/renderer/src/theme.css. If you change a palette's bg-base
+// there, update the matching entry here too.
 const THEME_BG: Record<string, string> = {
   'dark':             '#1D1912',
   'light':            '#F5F0E8',

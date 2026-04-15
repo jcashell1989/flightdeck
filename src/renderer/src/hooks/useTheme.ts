@@ -10,7 +10,11 @@ export function useTheme(themeId?: ThemeId | null): ThemeId {
     return 'light'
   })
 
+  // Only subscribe to OS theme events when following OS — avoids unnecessary
+  // IPC + App re-renders for users who've pinned an explicit theme.
+  const followOs = !themeId || themeId === 'os'
   useEffect(() => {
+    if (!followOs) return
     if (window.electronAPI) {
       window.electronAPI.getTheme().then((t) => setOsTheme(t as 'dark' | 'light'))
       const dispose = window.electronAPI.onThemeChanged((t) => setOsTheme(t as 'dark' | 'light'))
@@ -20,7 +24,7 @@ export function useTheme(themeId?: ThemeId | null): ThemeId {
     const handler = (e: MediaQueryListEvent) => setOsTheme(e.matches ? 'dark' : 'light')
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
-  }, [])
+  }, [followOs])
 
   // Resolved theme: explicit pin wins over OS default.
   const resolved: ThemeId = (!themeId || themeId === 'os') ? osTheme : themeId
