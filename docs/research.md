@@ -1,7 +1,7 @@
-# flight deck — Research & Evaluation
+# flightdeck — Research & Evaluation
 
 > Captured: 2026-04-06
-> Context: Evaluating existing tools and integration surfaces before designing flight deck.
+> Context: Evaluating existing tools and integration surfaces before designing flightdeck.
 
 ---
 

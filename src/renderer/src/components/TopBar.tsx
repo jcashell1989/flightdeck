@@ -63,7 +63,7 @@ export function TopBar({ sessions, connectionStatus = 'disabled', onCmdKClick, o
           }}
         />
         <span className="mono" style={{ fontWeight: 600, fontSize: 13, letterSpacing: '0.04em' }}>
-          flight deck
+          flightdeck
         </span>
       </div>
 

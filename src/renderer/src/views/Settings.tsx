@@ -96,7 +96,7 @@ export function Settings({ config, setConfig }: SettingsProps) {
 
       <Section title="Remote Access">
         <RemoteAccess config={config} setConfig={setConfig} />
-        <Hint>Expose the flight deck over HTTP so a mobile client can connect. Bind to 0.0.0.0 (or a Tailscale address) and share the pairing URL with your phone.</Hint>
+        <Hint>Expose flightdeck over HTTP so a mobile client can connect. Bind to 0.0.0.0 (or a Tailscale address) and share the pairing URL with your phone.</Hint>
       </Section>
     </div>
   )

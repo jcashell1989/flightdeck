@@ -1,4 +1,4 @@
-# flight deck — UX/UI Specification
+# flightdeck — UX/UI Specification
 
 > Status: Approved. Ready for Structure phase.
 > Last updated: 2026-04-06

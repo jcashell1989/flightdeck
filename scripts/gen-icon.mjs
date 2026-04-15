@@ -5,7 +5,7 @@
  * No external dependencies. Uses node:zlib for PNG compression and node:fs
  * to write the result. After running, use macOS `sips` to produce icon.icns.
  *
- * Design: dark Tokyo Night background (#1a1b26) with a "flight deck" dashboard
+ * Design: dark Tokyo Night background (#1a1b26) with a "flightdeck" dashboard
  * motif — three horizontal status bars in blue/purple, representing instrument
  * readouts. Simple, geometric, intentional.
  *

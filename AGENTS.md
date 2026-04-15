@@ -1,4 +1,4 @@
-# AGENTS.md — Working protocol for flight deck
+# AGENTS.md — Working protocol for flightdeck
 
 This file defines how AI agents (Claude Code, opencode, etc.) must work in
 this repository. It is terser than `CLAUDE.md` but carries the same authority.

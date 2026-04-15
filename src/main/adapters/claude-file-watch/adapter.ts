@@ -12,7 +12,7 @@
  * poison subsequent turns (queue chain uses .catch(() => {})).
  *
  * External-process guard: if a pid for this sessionId exists in the monitor
- * but was NOT launched by flight deck (i.e. not in the launcher's instances
+ * but was NOT launched by flightdeck (i.e. not in the launcher's instances
  * map), send() throws a descriptive error so the user knows to reply from
  * their terminal instead.
  */
@@ -35,7 +35,7 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
   private monitor: ClaudeMonitor
   private launcher: ClaudeLauncher | null = null
 
-  /** sessionIds that flight deck has ever launched — never cleared (pid reuse safe). */
+  /** sessionIds that flightdeck has ever launched — never cleared (pid reuse safe). */
   private launchedSessions = new Set<string>()
 
   /** Per-session FIFO send queue — errors don't poison subsequent turns. */
@@ -53,12 +53,12 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
   /** Wire the launcher after async creation (called from index.ts whenReady). */
   setLauncher(launcher: ClaudeLauncher): void {
     this.launcher = launcher
-    // Track every pid the launcher starts so we can distinguish flight-deck
+    // Track every pid the launcher starts so we can distinguish flightdeck
     // sessions from externally-launched ones.
     launcher.on('started', ({ sessionId }: { sessionId: string }) => {
       this.launchedSessions.add(sessionId)
     })
-    // No removal — once flight-deck owns a session, it owns it for process lifetime.
+    // No removal — once flightdeck owns a session, it owns it for process lifetime.
   }
 
   start(): void {

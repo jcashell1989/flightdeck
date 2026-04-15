@@ -1,6 +1,6 @@
 {
-  "name": "flight-deck",
-  "productName": "flight deck",
+  "name": "flightdeck",
+  "productName": "flightdeck",
   "version": "0.1.0",
   "description": "Multi-agent coding dashboard",
   "main": "./out/main/index.mjs",
@@ -17,11 +17,12 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:uat": "playwright test"
   },
   "build": {
-    "appId": "dev.flight-deck",
-    "productName": "flight deck",
+    "appId": "dev.flightdeck",
+    "productName": "flightdeck",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -44,6 +45,7 @@
     }
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",

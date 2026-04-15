@@ -1,4 +1,4 @@
-# flight deck — Adapter Architecture
+# flightdeck — Adapter Architecture
 
 > Status: Active. Approved (td-604527 closed 2026-04-10).
 > Ticket: td-604527
@@ -10,9 +10,9 @@
 
 ## Overview
 
-flight deck talks to multiple AI coding harnesses (opencode, Claude Code,
+flightdeck talks to multiple AI coding harnesses (opencode, Claude Code,
 future: Hermes, Letta, Codex). Each harness speaks a different protocol.
-Rather than hard-wiring each one into the registry, flight deck uses an
+Rather than hard-wiring each one into the registry, flightdeck uses an
 **adapter layer**: a small interface that each harness integration implements.
 
 The adapter layer is internal plumbing — it has no user-facing surface. Users
@@ -74,7 +74,7 @@ interface Session {
   pendingPermission?: PendingPermission | null
 
   // ── new ──
-  /** How flight deck controls this session. */
+  /** How flightdeck controls this session. */
   controlMode: 'managed' | 'watched'
   /** Which adapter owns this session's transport. */
   adapterId: string
@@ -92,7 +92,7 @@ interface Session {
 
 | Field | Values | Set by |
 |---|---|---|
-| `controlMode` | `'managed'` — flight deck spawned and controls the process. `'watched'` — externally started, flight deck observes only. | Adapter, at session creation or discovery time. A given adapter produces sessions of exactly one controlMode. If a future harness needs both managed and watched paths, model them as two separate adapters (e.g. `opencode-http` for managed, `opencode-file-watch` for watched). |
+| `controlMode` | `'managed'` — flightdeck spawned and controls the process. `'watched'` — externally started, flightdeck observes only. | Adapter, at session creation or discovery time. A given adapter produces sessions of exactly one controlMode. If a future harness needs both managed and watched paths, model them as two separate adapters (e.g. `opencode-http` for managed, `opencode-file-watch` for watched). |
 | `adapterId` | Opaque string matching the adapter's registered id (e.g. `'opencode-http'`, `'claude-file-watch'`, `'opencode-file-watch'`). | Adapter, stamped on every session it produces. |
 | `canReply` | `true` if the adapter implements `send()`. | **Derived by AdapterRegistry** — `typeof adapter.send === 'function'`. |
 | `canCommand` | `true` if the adapter implements `sendCommand()`. | **Derived by AdapterRegistry** — `typeof adapter.sendCommand === 'function'`. |
@@ -415,7 +415,7 @@ in multiple places.
 ## opencode-file-watch adapter (td-838cbc)
 
 Architectural precedent: `claude-file-watch`. New adapter watches
-`~/.local/share/opencode/storage/` for sessions started outside flight deck.
+`~/.local/share/opencode/storage/` for sessions started outside flightdeck.
 
 ### Data sources
 
@@ -430,7 +430,7 @@ source of truth** for session metadata.
 ```
 
 Dependency: `better-sqlite3` opened with `{ readonly: true }`. Read-only
-flag means flight deck physically cannot write to the database. WAL mode
+flag means flightdeck physically cannot write to the database. WAL mode
 allows concurrent readers alongside the TUI's writer (confirmed by probe:
 3 TUI sidecars + 1 serve + 1 reader all coexisted cleanly).
 
@@ -461,7 +461,7 @@ SQLite. State inference strategy:
 
 ### Ownership detection
 
-A session file in `storage/session/` could belong to a managed (flight-deck-
+A session file in `storage/session/` could belong to a managed (flightdeck-
 spawned) `opencode serve` instance or an external TUI. To avoid double-
 counting:
 

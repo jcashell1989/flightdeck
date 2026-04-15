@@ -45,12 +45,12 @@ const MOCK_SUMMARY: AnalyticsSummary = {
       totalOpencodeCostUsd: 1.47
     },
     {
-      projectPath: '/Users/dev/flight-deck',
-      projectName: 'flight-deck',
+      projectPath: '/Users/dev/flightdeck',
+      projectName: 'flightdeck',
       claudeCodeUsage: [
         {
           sessionId: 'cc-session-3',
-          projectPath: '/Users/dev/flight-deck',
+          projectPath: '/Users/dev/flightdeck',
           inputTokens: 130000,
           outputTokens: 42000,
           cacheWriteTokens: 210000,
@@ -62,7 +62,7 @@ const MOCK_SUMMARY: AnalyticsSummary = {
       opencodeSessions: [
         {
           sessionId: 'oc-session-2',
-          projectPath: '/Users/dev/flight-deck',
+          projectPath: '/Users/dev/flightdeck',
           realCostUsd: 3.82,
           messageCount: 51,
           totalInputTokens: 88000,
@@ -70,7 +70,7 @@ const MOCK_SUMMARY: AnalyticsSummary = {
         },
         {
           sessionId: 'oc-session-3',
-          projectPath: '/Users/dev/flight-deck',
+          projectPath: '/Users/dev/flightdeck',
           realCostUsd: 0.93,
           messageCount: 14,
           totalInputTokens: 18000,

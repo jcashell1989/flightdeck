@@ -38,7 +38,7 @@ export default function App() {
   return (
     <div>
       <header className="app-header">
-        <span className="app-title">Flight Deck</span>
+        <span className="app-title">Flightdeck</span>
         <span className="connection-status" data-status={snapshot.aggregateStatus.status}>
           {snapshot.aggregateStatus.status}
         </span>

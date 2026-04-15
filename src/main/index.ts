@@ -110,7 +110,7 @@ function createWindow(): void {
 
 /**
  * One-time migration: copy userData from the old "agentctl" app name to the
- * new "flight-deck" app name. Runs before any code reads app.getPath('userData')
+ * new "flightdeck" app name. Runs before any code reads app.getPath('userData')
  * so the rest of the app never sees the old path.
  * Migration failure must not crash the app — wrapped in try/catch.
  */
@@ -118,25 +118,39 @@ function migrateUserData(): void {
   try {
     const platform = process.platform
     const home = app.getPath('home')
-    let oldPath: string
+    // Ordered list of old paths to try, most recent first.
+    let oldPaths: string[]
     if (platform === 'darwin') {
-      oldPath = path.join(home, 'Library', 'Application Support', 'agentctl')
+      oldPaths = [
+        path.join(home, 'Library', 'Application Support', 'flight-deck'),
+        path.join(home, 'Library', 'Application Support', 'agentctl'),
+      ]
     } else if (platform === 'linux') {
-      oldPath = path.join(home, '.config', 'agentctl')
+      oldPaths = [
+        path.join(home, '.config', 'flight-deck'),
+        path.join(home, '.config', 'agentctl'),
+      ]
     } else {
       // win32
       const appData = process.env['APPDATA'] ?? path.join(home, 'AppData', 'Roaming')
-      oldPath = path.join(appData, 'agentctl')
+      oldPaths = [
+        path.join(appData, 'flight-deck'),
+        path.join(appData, 'agentctl'),
+      ]
     }
     const newPath = app.getPath('userData')
-    const oldExists = fs.existsSync(oldPath)
     const newExists = fs.existsSync(newPath)
-    if (oldExists && !newExists) {
-      fs.cpSync(oldPath, newPath, { recursive: true })
-      fs.rmSync(oldPath, { recursive: true, force: true })
-      console.log(`[main] migrated userData: ${oldPath} → ${newPath}`)
-    } else if (oldExists && newExists) {
-      console.warn(`[main] userData migration skipped: both old (${oldPath}) and new (${newPath}) paths exist. Remove the old path manually if desired.`)
+    for (const oldPath of oldPaths) {
+      const oldExists = fs.existsSync(oldPath)
+      if (oldExists && !newExists) {
+        fs.cpSync(oldPath, newPath, { recursive: true })
+        fs.rmSync(oldPath, { recursive: true, force: true })
+        console.log(`[main] migrated userData: ${oldPath} → ${newPath}`)
+        break
+      } else if (oldExists && newExists) {
+        console.warn(`[main] userData migration skipped: both old (${oldPath}) and new (${newPath}) paths exist. Remove the old path manually if desired.`)
+        break
+      }
     }
   } catch (e) {
     console.error('[main] userData migration failed (non-fatal):', e)

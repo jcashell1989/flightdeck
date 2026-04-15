@@ -1,4 +1,4 @@
-# flight deck Codebase Evaluation
+# flightdeck Codebase Evaluation
 
 **Date:** 2026-04-08  
 **Session:** ses_0ab6d4  
@@ -9,7 +9,7 @@
 ## 1. Structure Map
 
 ```
-flight-deck/                         # née agentctl (renamed td-a0b401)
+flightdeck/                          # née agentctl (renamed td-a0b401)
 ├── src/
 │   ├── main/                        # Electron main process
 │   │   ├── index.ts                 # App entry, window creation, IPC registration, userData migration

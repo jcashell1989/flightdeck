@@ -1,4 +1,4 @@
-# flight deck — Claude Code Monitor Design
+# flightdeck — Claude Code Monitor Design
 
 > Status: Implemented and UAT-verified.
 > Ticket: td-4a41eb (monitor) · td-8b02fa (dispatch)

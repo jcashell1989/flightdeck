@@ -1,4 +1,4 @@
-# flight deck — Structure & Build Phases
+# flightdeck — Structure & Build Phases
 
 > Status: Approved.
 > Last updated: 2026-04-11
@@ -159,7 +159,7 @@ No E2E framework until interaction surface stabilizes.
 
 **Ticket:** `td-be1f9c`
 
-**Goal:** flight deck launches and manages `opencode serve` processes on behalf of
+**Goal:** flightdeck launches and manages `opencode serve` processes on behalf of
 configured Agent Profiles. Users can run multiple opencode instances with
 different models (e.g. Claude Sonnet as primary, kimi-k2.5 as fallback) and
 select between them in the `⌘K` dispatch overlay.

@@ -12,7 +12,7 @@ interface ProjectGroupProps {
 // sessionStorage persists across view switches within the same app run
 // but clears on app restart — matches spec-ux §2 collapse-persistence rule
 // without lifting state through the router outlet.
-const COLLAPSE_STORAGE_KEY = 'flight-deck.dashboard.collapsed'
+const COLLAPSE_STORAGE_KEY = 'flightdeck.dashboard.collapsed'
 
 function readCollapsed(projectId: string): boolean {
   try {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * flight deck — automated UAT runner
+ * flightdeck — automated UAT runner
  * Connects to a running Electron app via CDP (port 9222).
  * Launch the app with: npm run dev:uat
  *
@@ -53,7 +53,7 @@ const browser = { close: async () => page.close() }
 await page.evaluate(() => window.focus()).catch(() => {})
 
 console.log('\n═══════════════════════════════════════════════════')
-console.log('  flight deck UAT — automated pass')
+console.log('  flightdeck UAT — automated pass')
 console.log('═══════════════════════════════════════════════════\n')
 
 // ── §0 Setup ────────────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ try {
     window.electronAPI?.profile?.list?.()
   )
   // profiles is a Promise — check for profile text on settings page instead
-  const cfgRaw = readFileSync(`${process.env.HOME}/Library/Application Support/flight-deck/config.json`, 'utf8')
+  const cfgRaw = readFileSync(`${process.env.HOME}/Library/Application Support/flightdeck/config.json`, 'utf8')
   const cfg = JSON.parse(cfgRaw)
   opencodeHasProfile = cfg.profiles?.some(p => p.agentType === 'opencode') ?? false
 } catch { /* ignore */ }
@@ -148,10 +148,10 @@ try {
 console.log('\n── §1 Top Bar ────────────────────────────────────')
 await wait(500)
 
-// App was renamed from AGENTCTL → flight deck
-const wordmark = await hasText(page, 'flight deck') || await hasText(page, 'AGENTCTL')
-if (wordmark) pass('1-wordmark', 'Wordmark renders (flight deck / agentctl)')
-else fail('1-wordmark', 'Wordmark not found (checked: "flight deck", "AGENTCTL")')
+// App was renamed from AGENTCTL → flightdeck
+const wordmark = await hasText(page, 'flightdeck') || await hasText(page, 'AGENTCTL')
+if (wordmark) pass('1-wordmark', 'Wordmark renders (flightdeck / agentctl)')
+else fail('1-wordmark', 'Wordmark not found (checked: "flightdeck", "AGENTCTL")')
 
 // Health dot — look for a dot/circle element in the top bar
 const topBarDot = await page.locator('[class*="health"], [class*="dot"], [class*="status"]').first().count()
@@ -193,7 +193,7 @@ else fail('2-icons', 'Nav icons missing — expected ⊞ ⊟ ⊕ ◈ ⚙')
 await page.click('body')
 await pressKey(page, '1')
 await ss(page, 'nav-key-1-dashboard')
-const dashboardActive = await hasText(page, 'flight deck') || await hasText(page, 'AGENTCTL')
+const dashboardActive = await hasText(page, 'flightdeck') || await hasText(page, 'AGENTCTL')
 if (dashboardActive) pass('2-key-1', '`1` key → Dashboard (wordmark visible)')
 else partial('2-key-1', '`1` key pressed — verify visually')
 
@@ -705,7 +705,7 @@ skip('11-stale-idle', 'Stale idle session leak (td-d773e91) — long-running man
 console.log('\n── §12 Config & Persistence ──────────────────────')
 
 // Check config file exists and is valid JSON
-const configPath = `${process.env.HOME}/Library/Application Support/flight-deck/config.json`
+const configPath = `${process.env.HOME}/Library/Application Support/flightdeck/config.json`
 let configValid = false
 try {
   const raw = readFileSync(configPath, 'utf8')
