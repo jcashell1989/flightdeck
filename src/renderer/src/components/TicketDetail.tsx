@@ -4,13 +4,14 @@ import { useState } from 'react'
 interface TicketDetailProps {
   ticket: TdTicket | null
   loading: boolean
-  onStart: (id: string) => void
-  onHandoff: (id: string) => void
-  onLog: (id: string, message: string) => void
+  onStart: (id: string) => Promise<void> | void
+  onHandoff: (id: string) => Promise<void> | void
+  onLog: (id: string, message: string) => Promise<void> | void
 }
 
 export function TicketDetail({ ticket, loading, onStart, onHandoff, onLog }: TicketDetailProps) {
   const [logMsg, setLogMsg] = useState('')
+  const [logError, setLogError] = useState<string | null>(null)
 
   if (loading) {
     return <div style={{ padding: 16, color: 'var(--fg-muted)', fontSize: 12 }}>Loading...</div>
@@ -19,10 +20,15 @@ export function TicketDetail({ ticket, loading, onStart, onHandoff, onLog }: Tic
     return <div style={{ padding: 16, color: 'var(--fg-muted)', fontSize: 12 }}>Select a ticket</div>
   }
 
-  const handleLog = () => {
+  const handleLog = async () => {
     if (!logMsg.trim()) return
-    onLog(ticket.id, logMsg.trim())
-    setLogMsg('')
+    setLogError(null)
+    try {
+      await onLog(ticket.id, logMsg.trim())
+      setLogMsg('')
+    } catch (e) {
+      setLogError(String(e))
+    }
   }
 
   return (
@@ -41,10 +47,10 @@ export function TicketDetail({ ticket, loading, onStart, onHandoff, onLog }: Tic
       )}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
         {ticket.status === 'open' && (
-          <button onClick={() => onStart(ticket.id)} style={btnStyle}>Start</button>
+          <button onClick={() => { void onStart(ticket.id) }} style={btnStyle}>Start</button>
         )}
         {ticket.status === 'in_progress' && (
-          <button onClick={() => onHandoff(ticket.id)} style={btnStyle}>Handoff</button>
+          <button onClick={() => { void onHandoff(ticket.id) }} style={btnStyle}>Handoff</button>
         )}
       </div>
       {ticket.logs && ticket.logs.length > 0 && (
@@ -62,7 +68,10 @@ export function TicketDetail({ ticket, loading, onStart, onHandoff, onLog }: Tic
         <div style={{ fontWeight: 600, marginBottom: 6, color: 'var(--fg-muted)' }}>Add log entry</div>
         <textarea
           value={logMsg}
-          onChange={(e) => setLogMsg(e.target.value)}
+          onChange={(e) => {
+            setLogMsg(e.target.value)
+            if (logError) setLogError(null)
+          }}
           placeholder="Log message..."
           rows={2}
           style={{
@@ -77,9 +86,12 @@ export function TicketDetail({ ticket, loading, onStart, onHandoff, onLog }: Tic
             boxSizing: 'border-box',
             marginBottom: 6,
           }}
-          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleLog() }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void handleLog() }}
         />
-        <button onClick={handleLog} disabled={!logMsg.trim()} style={btnStyle}>Log (⌘↵)</button>
+        {logError && (
+          <div style={{ color: 'var(--status-error)', marginBottom: 6 }}>{logError}</div>
+        )}
+        <button onClick={() => { void handleLog() }} disabled={!logMsg.trim()} style={btnStyle}>Log (⌘↵)</button>
       </div>
     </div>
   )
