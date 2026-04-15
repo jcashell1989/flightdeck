@@ -11,7 +11,7 @@ interface TicketDetailProps {
 
 export function TicketDetail({ ticket, loading, onStart, onHandoff, onLog }: TicketDetailProps) {
   const [logMsg, setLogMsg] = useState('')
-  const [logError, setLogError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   if (loading) {
     return <div style={{ padding: 16, color: 'var(--fg-muted)', fontSize: 12 }}>Loading...</div>
@@ -22,12 +22,30 @@ export function TicketDetail({ ticket, loading, onStart, onHandoff, onLog }: Tic
 
   const handleLog = async () => {
     if (!logMsg.trim()) return
-    setLogError(null)
+    setActionError(null)
     try {
       await onLog(ticket.id, logMsg.trim())
       setLogMsg('')
     } catch (e) {
-      setLogError(String(e))
+      setActionError(getErrorMessage(e))
+    }
+  }
+
+  const handleStart = async () => {
+    setActionError(null)
+    try {
+      await onStart(ticket.id)
+    } catch (e) {
+      setActionError(getErrorMessage(e))
+    }
+  }
+
+  const handleHandoff = async () => {
+    setActionError(null)
+    try {
+      await onHandoff(ticket.id)
+    } catch (e) {
+      setActionError(getErrorMessage(e))
     }
   }
 
@@ -47,12 +65,15 @@ export function TicketDetail({ ticket, loading, onStart, onHandoff, onLog }: Tic
       )}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
         {ticket.status === 'open' && (
-          <button onClick={() => { void onStart(ticket.id) }} style={btnStyle}>Start</button>
+          <button onClick={() => { void handleStart() }} style={btnStyle}>Start</button>
         )}
         {ticket.status === 'in_progress' && (
-          <button onClick={() => { void onHandoff(ticket.id) }} style={btnStyle}>Handoff</button>
+          <button onClick={() => { void handleHandoff() }} style={btnStyle}>Handoff</button>
         )}
       </div>
+      {actionError && (
+        <div style={{ color: 'var(--status-error)', marginBottom: 12 }}>{actionError}</div>
+      )}
       {ticket.logs && ticket.logs.length > 0 && (
         <div>
           <div style={{ fontWeight: 600, marginBottom: 6, color: 'var(--fg-muted)' }}>Log</div>
@@ -70,7 +91,7 @@ export function TicketDetail({ ticket, loading, onStart, onHandoff, onLog }: Tic
           value={logMsg}
           onChange={(e) => {
             setLogMsg(e.target.value)
-            if (logError) setLogError(null)
+            if (actionError) setActionError(null)
           }}
           placeholder="Log message..."
           rows={2}
@@ -88,9 +109,6 @@ export function TicketDetail({ ticket, loading, onStart, onHandoff, onLog }: Tic
           }}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void handleLog() }}
         />
-        {logError && (
-          <div style={{ color: 'var(--status-error)', marginBottom: 6 }}>{logError}</div>
-        )}
         <button onClick={() => { void handleLog() }} disabled={!logMsg.trim()} style={btnStyle}>Log (⌘↵)</button>
       </div>
     </div>
@@ -105,4 +123,8 @@ const btnStyle: React.CSSProperties = {
   cursor: 'pointer',
   fontSize: 11,
   padding: '3px 10px',
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
