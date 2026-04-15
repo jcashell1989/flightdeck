@@ -16,18 +16,18 @@ import type {
 } from '../shared/types'
 import { TD_DEFAULT_WATCH_KEY } from '../shared/td'
 
-const tdWatchOps = new Map<string, Promise<unknown>>()
+const pendingWatchOpsByCwd = new Map<string, Promise<unknown>>()
 
 function queueTdWatchOp(cwd: string | undefined, channel: 'td:watch' | 'td:unwatch'): void {
   const key = cwd ?? TD_DEFAULT_WATCH_KEY
-  const previous = tdWatchOps.get(key) ?? Promise.resolve()
+  const previous = pendingWatchOpsByCwd.get(key) ?? Promise.resolve()
   const next = previous
     .catch(() => undefined)
     .then(() => ipcRenderer.invoke(channel, cwd))
     .finally(() => {
-      if (tdWatchOps.get(key) === next) tdWatchOps.delete(key)
+      if (pendingWatchOpsByCwd.get(key) === next) pendingWatchOpsByCwd.delete(key)
     })
-  tdWatchOps.set(key, next)
+  pendingWatchOpsByCwd.set(key, next)
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {

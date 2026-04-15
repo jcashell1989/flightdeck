@@ -8,6 +8,7 @@ type TdWatcherEntry = {
 }
 
 function watcherKey(cwd?: string): string {
+  // Prefix cwd keys so they remain disjoint from non-path sentinel keys.
   return cwd ? `cwd:${cwd}` : TD_DEFAULT_WATCH_KEY
 }
 
