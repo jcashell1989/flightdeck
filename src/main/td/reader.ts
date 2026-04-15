@@ -1,20 +1,7 @@
 import { spawn } from 'child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import type { TdUsageResult } from '../../shared/types'
-
-export interface TdTicket {
-  id: string
-  title: string
-  description: string
-  status: 'open' | 'in_progress' | 'in_review' | 'approved' | 'closed'
-  priority: string
-  type: string
-  created_at: string
-  updated_at: string
-  implementer_session: string
-  logs: Array<{ message: string; timestamp: string; type: string; session: string }>
-}
+import type { TdTicket, TdUsageResult } from '../../shared/types'
 
 function runTd(args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -34,22 +21,14 @@ function runTd(args: string[], cwd: string): Promise<string> {
 export class TdReader {
   async list(cwd?: string): Promise<TdTicket[]> {
     const dir = cwd ?? process.cwd()
-    try {
-      const out = await runTd(['list', '--format', 'json'], dir)
-      return JSON.parse(out) as TdTicket[]
-    } catch {
-      return []
-    }
+    const out = await runTd(['list', '--format', 'json'], dir)
+    return JSON.parse(out) as TdTicket[]
   }
 
   async show(id: string, cwd?: string): Promise<TdTicket | null> {
     const dir = cwd ?? process.cwd()
-    try {
-      const out = await runTd(['show', id, '--format', 'json'], dir)
-      return JSON.parse(out) as TdTicket
-    } catch {
-      return null
-    }
+    const out = await runTd(['show', id, '--format', 'json'], dir)
+    return JSON.parse(out) as TdTicket
   }
 
   async start(id: string, cwd?: string): Promise<void> {

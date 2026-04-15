@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useTd } from '../hooks/useTd'
 import { TicketCard } from '../components/TicketCard'
 import { TicketDetail } from '../components/TicketDetail'
@@ -16,6 +17,13 @@ interface KanbanViewProps {
 
 export function KanbanView({ cwd }: KanbanViewProps) {
   const { tickets, loading, error, refresh, selectedId, detail, detailLoading, loadDetail, start, log, handoff } = useTd(cwd)
+  const ticketsByStatus = useMemo<Record<TdTicket['status'], TdTicket[]>>(() => ({
+    open: tickets.filter((t) => t.status === 'open'),
+    in_progress: tickets.filter((t) => t.status === 'in_progress'),
+    in_review: tickets.filter((t) => t.status === 'in_review'),
+    approved: tickets.filter((t) => t.status === 'approved'),
+    closed: tickets.filter((t) => t.status === 'closed'),
+  }), [tickets])
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
@@ -28,7 +36,7 @@ export function KanbanView({ cwd }: KanbanViewProps) {
           <div style={{ color: 'var(--status-error)', fontSize: 12 }}>{error}</div>
         )}
         {COLUMNS.map((col) => {
-          const colTickets = tickets.filter((t) => (col.statuses as string[]).includes(t.status))
+          const colTickets = col.statuses.flatMap((status) => ticketsByStatus[status])
           return (
             <div
               key={col.id}

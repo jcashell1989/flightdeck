@@ -89,7 +89,7 @@ export interface ElectronAPI {
     log: (id: string, message: string, cwd?: string) => Promise<void>
     handoff: (id: string, cwd?: string) => Promise<void>
     usage: (cwd?: string) => Promise<TdUsageResult>
-    onTdChange: (cb: () => void) => () => void
+    onTdChange: (cwd: string | undefined, cb: () => void) => () => void
   }
 }
 

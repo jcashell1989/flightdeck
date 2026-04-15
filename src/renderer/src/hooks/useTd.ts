@@ -67,9 +67,9 @@ export function useTd(cwd?: string) {
   useEffect(() => {
     const api = window.electronAPI?.td
     if (!api?.onTdChange) return
-    const unsub = api.onTdChange(() => { void refresh() })
+    const unsub = api.onTdChange(cwd, () => { void refresh() })
     return unsub
-  }, [refresh])
+  }, [cwd, refresh])
 
   // Auto-refresh every 30 seconds
   useEffect(() => {

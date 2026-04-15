@@ -880,9 +880,9 @@ function TodoTab({ project, useMock }: { project: Project | null; useMock: boole
   useEffect(() => {
     const api = window.electronAPI?.td
     if (!api?.onTdChange) return
-    const unsub = api.onTdChange(() => { void refresh() })
+    const unsub = api.onTdChange(project?.path, () => { void refresh() })
     return unsub
-  }, [refresh])
+  }, [project?.path, refresh])
 
   const sections: { label: string; tickets: TdTicket[] }[] = []
   if (data) {

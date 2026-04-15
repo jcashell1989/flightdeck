@@ -121,10 +121,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     log: (id: string, message: string, cwd?: string): Promise<void> => ipcRenderer.invoke('td:log', id, message, cwd),
     handoff: (id: string, cwd?: string): Promise<void> => ipcRenderer.invoke('td:handoff', id, cwd),
     usage: (cwd?: string): Promise<TdUsageResult> => ipcRenderer.invoke('td:usage', cwd),
-    onTdChange: (cb: () => void): (() => void) => {
-      const handler = (): void => cb()
+    onTdChange: (cwd: string | undefined, cb: () => void): (() => void) => {
+      void ipcRenderer.invoke('td:watch', cwd)
+      const expectedCwd = cwd ?? null
+      const handler = (_event: IpcRendererEvent, payload?: { cwd?: string | null }): void => {
+        if ((payload?.cwd ?? null) === expectedCwd) cb()
+      }
       ipcRenderer.on('td:change', handler)
-      return () => ipcRenderer.removeListener('td:change', handler)
+      return () => {
+        ipcRenderer.removeListener('td:change', handler)
+        void ipcRenderer.invoke('td:unwatch', cwd)
+      }
     }
   }
 })

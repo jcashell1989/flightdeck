@@ -1,7 +1,16 @@
 import { safeHandle } from './_helpers'
 import { tdReader } from '../td/reader'
 
-let _tdWatcherDispose: (() => void) | null = null
+type TdWatcherEntry = {
+  refCount: number
+  dispose: () => void
+}
+
+const _tdWatchers = new Map<string, TdWatcherEntry>()
+
+function watcherKey(cwd?: string): string {
+  return cwd ?? '__default__'
+}
 
 export function register(broadcast: (channel: string, payload: unknown) => void): void {
   safeHandle('td:list', async (_e, cwd?: string) => tdReader.list(cwd))
@@ -11,11 +20,33 @@ export function register(broadcast: (channel: string, payload: unknown) => void)
   safeHandle('td:handoff', async (_e, id: string, cwd?: string) => { await tdReader.handoff(id, cwd) })
   safeHandle('td:usage', async (_e, cwd?: string) => tdReader.usage(cwd))
 
-  // Start watching .td/ for changes and push td:change to the renderer.
-  _tdWatcherDispose = tdReader.watchStateDir(() => broadcast('td:change', null))
+  safeHandle('td:watch', async (_e, cwd?: string) => {
+    const key = watcherKey(cwd)
+    const current = _tdWatchers.get(key)
+    if (current) {
+      current.refCount += 1
+      return { ok: true }
+    }
+
+    const dispose = tdReader.watchStateDir(() => broadcast('td:change', { cwd: cwd ?? null }), cwd)
+    _tdWatchers.set(key, { refCount: 1, dispose })
+    return { ok: true }
+  })
+
+  safeHandle('td:unwatch', async (_e, cwd?: string) => {
+    const key = watcherKey(cwd)
+    const current = _tdWatchers.get(key)
+    if (!current) return { ok: true }
+    current.refCount -= 1
+    if (current.refCount <= 0) {
+      current.dispose()
+      _tdWatchers.delete(key)
+    }
+    return { ok: true }
+  })
 }
 
 export function dispose(): void {
-  _tdWatcherDispose?.()
-  _tdWatcherDispose = null
+  for (const watcher of _tdWatchers.values()) watcher.dispose()
+  _tdWatchers.clear()
 }
