@@ -18,7 +18,7 @@ function runTd(args: string[], cwd: string): Promise<string> {
   })
 }
 
-function parseTdJson<T>(raw: string, context: string): T {
+export function parseTdJson<T>(raw: string, context: string): T {
   try {
     return JSON.parse(raw) as T
   } catch (e) {

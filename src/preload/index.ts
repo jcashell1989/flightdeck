@@ -18,6 +18,7 @@ import type {
 const tdWatchOps = new Map<string, Promise<unknown>>()
 
 function queueTdWatchOp(cwd: string | undefined, channel: 'td:watch' | 'td:unwatch'): void {
+  // Null-byte prefix sentinel prevents collisions with real filesystem paths.
   const key = cwd ?? '\0default'
   const previous = tdWatchOps.get(key) ?? Promise.resolve()
   const next = previous

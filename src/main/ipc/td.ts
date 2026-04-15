@@ -6,47 +6,69 @@ type TdWatcherEntry = {
   dispose: () => void
 }
 
-const _tdWatchers = new Map<string, TdWatcherEntry>()
-
 function watcherKey(cwd?: string): string {
+  // Null-byte prefix cannot appear in valid filesystem paths, so this sentinel
+  // is collision-safe for the undefined/default cwd bucket.
   return cwd ? `cwd:${cwd}` : '\0default'
 }
 
+export function createTdWatchManager(
+  watchStateDir: (onChange: () => void, cwd?: string) => () => void,
+  broadcast: (channel: string, payload: unknown) => void,
+): { watch: (cwd?: string) => void; unwatch: (cwd?: string) => void; disposeAll: () => void } {
+  const watchers = new Map<string, TdWatcherEntry>()
+
+  return {
+    watch(cwd?: string): void {
+      const key = watcherKey(cwd)
+      const current = watchers.get(key)
+      if (current) {
+        current.refCount += 1
+        return
+      }
+      const dispose = watchStateDir(() => broadcast('td:change', { cwd: cwd ?? null }), cwd)
+      watchers.set(key, { refCount: 1, dispose })
+    },
+    unwatch(cwd?: string): void {
+      const key = watcherKey(cwd)
+      const current = watchers.get(key)
+      if (!current) return
+      current.refCount -= 1
+      if (current.refCount <= 0) {
+        current.dispose()
+        watchers.delete(key)
+      }
+    },
+    disposeAll(): void {
+      for (const watcher of watchers.values()) watcher.dispose()
+      watchers.clear()
+    },
+  }
+}
+
+let _watchManager: ReturnType<typeof createTdWatchManager> | null = null
+
 export function register(broadcast: (channel: string, payload: unknown) => void): void {
+  _watchManager?.disposeAll()
+  _watchManager = createTdWatchManager((onChange, cwd) => tdReader.watchStateDir(onChange, cwd), broadcast)
   safeHandle('td:list', async (_e, cwd?: string) => tdReader.list(cwd))
   safeHandle('td:show', async (_e, id: string, cwd?: string) => tdReader.show(id, cwd))
   safeHandle('td:start', async (_e, id: string, cwd?: string) => { await tdReader.start(id, cwd) })
   safeHandle('td:log', async (_e, id: string, message: string, cwd?: string) => { await tdReader.log(id, message, cwd) })
   safeHandle('td:handoff', async (_e, id: string, cwd?: string) => { await tdReader.handoff(id, cwd) })
   safeHandle('td:usage', async (_e, cwd?: string) => tdReader.usage(cwd))
-
   safeHandle('td:watch', async (_e, cwd?: string) => {
-    const key = watcherKey(cwd)
-    const current = _tdWatchers.get(key)
-    if (current) {
-      current.refCount += 1
-      return { ok: true }
-    }
-
-    const dispose = tdReader.watchStateDir(() => broadcast('td:change', { cwd: cwd ?? null }), cwd)
-    _tdWatchers.set(key, { refCount: 1, dispose })
+    _watchManager?.watch(cwd)
     return { ok: true }
   })
 
   safeHandle('td:unwatch', async (_e, cwd?: string) => {
-    const key = watcherKey(cwd)
-    const current = _tdWatchers.get(key)
-    if (!current) return { ok: true }
-    current.refCount -= 1
-    if (current.refCount <= 0) {
-      current.dispose()
-      _tdWatchers.delete(key)
-    }
+    _watchManager?.unwatch(cwd)
     return { ok: true }
   })
 }
 
 export function dispose(): void {
-  for (const watcher of _tdWatchers.values()) watcher.dispose()
-  _tdWatchers.clear()
+  _watchManager?.disposeAll()
+  _watchManager = null
 }
