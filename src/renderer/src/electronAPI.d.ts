@@ -47,6 +47,8 @@ export interface ElectronAPI {
       title?: string
     }) => Promise<{ sessionId: string }>
     getDiff: (path: string) => Promise<ProcessResult>
+    onPermissionRequest: (cb: (payload: { sessionId: string; requestId: string; toolName: string; input: Record<string, unknown>; toolUseId: string }) => void) => () => void
+    onStreamUpdate: (cb: (payload: { sessionId: string; currentAction: string; state: string }) => void) => () => void
   }
   project: {
     validate: (path: string) => Promise<ProjectValidationResult>

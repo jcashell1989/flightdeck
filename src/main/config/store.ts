@@ -350,6 +350,11 @@ export function validatePatch(patch: unknown): Partial<AppConfig> {
           throw new Error(`invalid config patch: profile ${field} must be a string`)
         }
       }
+      if ('permissionMode' in pr && pr['permissionMode'] !== undefined) {
+        if (pr['permissionMode'] !== 'default' && pr['permissionMode'] !== 'acceptEdits') {
+          throw new Error('invalid config patch: profile permissionMode must be default or acceptEdits')
+        }
+      }
     }
   }
 

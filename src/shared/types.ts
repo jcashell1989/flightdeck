@@ -57,6 +57,8 @@ export interface AgentProfile {
   apiKey?: string
   /** When true, this profile is pre-selected in the dispatch overlay */
   isDefault: boolean
+  /** Controls tool approval prompts. 'acceptEdits' = auto-approve (default). 'default' = prompt per tool. */
+  permissionMode?: 'default' | 'acceptEdits'
 }
 
 export interface HttpConfig {

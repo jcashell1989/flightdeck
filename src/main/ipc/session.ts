@@ -129,3 +129,26 @@ export function attachBroadcast(
   _broadcastChangeHandler = () => broadcast('agent:snapshot', registry.snapshot())
   registry.on('change', _broadcastChangeHandler)
 }
+
+let _claudeAdapter: import('../adapters/claude-file-watch/adapter').ClaudeFileWatchAdapter | null = null
+
+export function attachClaudeAdapter(
+  adapter: import('../adapters/claude-file-watch/adapter').ClaudeFileWatchAdapter,
+  broadcast: (channel: string, payload: unknown) => void
+): void {
+  _claudeAdapter = adapter
+  adapter.on('permission_request', (payload: { sessionId: string; requestId: string; toolName: string; input: Record<string, unknown>; toolUseId: string }) => {
+    broadcast('agent:permission_request', payload)
+  })
+  adapter.on('change', () => {
+    const snap = adapter.snapshot()
+    for (const p of snap.projects) {
+      for (const s of p.sessions) {
+        if (s.state === 'running' || s.state === 'approval') {
+          broadcast('agent:stream_update', { sessionId: s.id, currentAction: s.currentAction, state: s.state })
+        }
+      }
+    }
+  })
+}
+

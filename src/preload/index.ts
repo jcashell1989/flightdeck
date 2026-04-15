@@ -77,7 +77,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       prompt: string
       title?: string
     }): Promise<{ sessionId: string }> => ipcRenderer.invoke('agent:dispatch', args),
-    getDiff: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('project:diff', path)
+    getDiff: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('project:diff', path),
+    onPermissionRequest: (cb: (payload: { sessionId: string; requestId: string; toolName: string; input: Record<string, unknown>; toolUseId: string }) => void): (() => void) => {
+      const handler = (_e: IpcRendererEvent, payload: { sessionId: string; requestId: string; toolName: string; input: Record<string, unknown>; toolUseId: string }): void => cb(payload)
+      ipcRenderer.on('agent:permission_request', handler)
+      return () => ipcRenderer.removeListener('agent:permission_request', handler)
+    },
+    onStreamUpdate: (cb: (payload: { sessionId: string; currentAction: string; state: string }) => void): (() => void) => {
+      const handler = (_e: IpcRendererEvent, payload: { sessionId: string; currentAction: string; state: string }): void => cb(payload)
+      ipcRenderer.on('agent:stream_update', handler)
+      return () => ipcRenderer.removeListener('agent:stream_update', handler)
+    }
   },
   project: {
     validate: (path: string): Promise<ProjectValidationResult> =>

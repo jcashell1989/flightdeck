@@ -6,7 +6,7 @@
  * opencode snapshot.
  */
 
-export type ClaudeSessionState = 'running' | 'idle' | 'error' | 'question'
+export type ClaudeSessionState = 'running' | 'idle' | 'error' | 'question' | 'approval'
 
 export interface ClaudeSession {
   /** UUID from ~/.claude/sessions/<pid>.json */
@@ -25,6 +25,13 @@ export interface ClaudeSession {
   lastActivity: number
   /** Last end_turn text content, truncated to 120 chars */
   statusLine?: string
+  /** Pending tool-approval request from a control_request stdout event */
+  pendingPermissionRequest?: {
+    requestId: string
+    toolName: string
+    input: Record<string, unknown>
+    toolUseId: string
+  } | null
 }
 
 export interface ClaudeProject {

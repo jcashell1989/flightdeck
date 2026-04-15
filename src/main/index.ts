@@ -203,6 +203,8 @@ app.whenReady().then(async () => {
   launcher.on('started', ({ pid, sessionId, directory }: { pid: number; sessionId: string; directory: string }) => {
     claudeFileWatchAdapter.getMonitor().trackLaunchedSession({ pid, sessionId, cwd: directory, startedAt: Date.now() })
   })
+  // Wire permission_request and stream_update push channels.
+  ipcSession.attachClaudeAdapter(claudeFileWatchAdapter, broadcast)
   // Start all adapters (each handles mock mode guard internally).
   adapterRegistry.start()
   analyticsMonitor.start()

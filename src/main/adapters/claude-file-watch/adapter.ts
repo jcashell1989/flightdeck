@@ -22,8 +22,126 @@ import { ClaudeMonitor } from './monitor'
 import type { ClaudeLauncher } from './launcher'
 import type { Adapter, AdapterSnapshot } from '../types'
 import type { NormalizedProject } from '../opencode-http/types'
-import type { ClaudeProject } from './types'
+import type { ClaudeProject, ClaudeSession } from './types'
 import { configStore } from '../../config/store'
+
+// ── Reducer types ──────────────────────────────────────────────────────────
+
+type AdapterEvent =
+  | { source: 'stdout'; kind: 'tool_progress'; sessionId: string; toolName: string; turnId: number }
+  | { source: 'stdout'; kind: 'control_request'; sessionId: string; requestId: string; toolName: string; input: Record<string, unknown>; toolUseId: string; turnId: number }
+  | { source: 'stdout'; kind: 'result'; sessionId: string; subtype: string; turnId: number }
+  | { source: 'file'; kind: 'session_update'; sessionId: string; session: ClaudeSession }
+
+interface LiveEntry {
+  session: ClaudeSession
+  turnId: number
+}
+
+/**
+ * Pure reducer — no side effects. Takes current LiveEntry and an event,
+ * returns new LiveEntry (or undefined to remove from liveState).
+ */
+function reduceEntry(current: LiveEntry | undefined, event: AdapterEvent): LiveEntry | undefined {
+  if (event.source === 'file' && event.kind === 'session_update') {
+    // File-watch reconciliation: apply only when no active stdout stream owns state.
+    if (current && current.session.pendingPermissionRequest) {
+      // Approval pending — don't overwrite stdout-owned state.
+      return current
+    }
+    // Merge file-watch session, preserving turnId.
+    return {
+      session: event.session,
+      turnId: current?.turnId ?? 0
+    }
+  }
+
+  // stdout events
+  if (event.source === 'stdout') {
+    // Drop stale events — event.turnId is older than what we've already applied.
+    if (current && event.turnId < current.turnId) {
+      return current
+    }
+
+    const base = current ?? {
+      session: {
+        sessionId: event.sessionId,
+        pid: 0,
+        cwd: '',
+        startedAt: Date.now(),
+        state: 'running' as const,
+        currentAction: '',
+        lastActivity: Date.now()
+      },
+      turnId: event.turnId
+    }
+
+    if (event.kind === 'tool_progress') {
+      return {
+        ...base,
+        session: {
+          ...base.session,
+          currentAction: '⚙ ' + event.toolName
+        }
+      }
+    }
+
+    if (event.kind === 'control_request') {
+      return {
+        ...base,
+        session: {
+          ...base.session,
+          state: 'approval',
+          currentAction: '⚠ approve ' + event.toolName,
+          pendingPermissionRequest: {
+            requestId: event.requestId,
+            toolName: event.toolName,
+            input: event.input,
+            toolUseId: event.toolUseId
+          }
+        }
+      }
+    }
+
+    if (event.kind === 'result') {
+      if (event.subtype === 'success' || event.subtype === 'permission_responded') {
+        return {
+          ...base,
+          session: {
+            ...base.session,
+            state: 'idle',
+            currentAction: '◌ idle',
+            pendingPermissionRequest: null
+          }
+        }
+      }
+      // error_* subtypes
+      if (event.subtype.startsWith('error')) {
+        return {
+          ...base,
+          session: {
+            ...base.session,
+            state: 'error',
+            currentAction: '✗ error',
+            pendingPermissionRequest: null
+          }
+        }
+      }
+      // Unknown subtype — treat as success
+      return {
+        ...base,
+        session: {
+          ...base.session,
+          state: 'idle',
+          currentAction: '◌ idle',
+          pendingPermissionRequest: null
+        }
+      }
+    }
+  }
+
+  return current
+}
 
 const STDERR_CAP = 200
 
@@ -44,10 +162,50 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
   /** Per-session stderr log buffer, capped at STDERR_CAP lines. */
   private sessionLogs = new Map<string, string[]>()
 
+  /** Live stdout-owned state for launcher-managed sessions. */
+  private liveState = new Map<string, LiveEntry>()
+
+  /** Per-session monotonic turn counter. Incremented on each result event. */
+  private turnIds = new Map<string, number>()
+
   constructor(monitor: ClaudeMonitor) {
     super()
     this.monitor = monitor
-    monitor.on('change', () => this.emit('change'))
+    monitor.on('change', () => {
+      // Push file-watch session_update events through reducer for sessions
+      // that have no pending permission in liveState.
+      const snap = monitor.getSnapshot()
+      for (const project of snap.projects) {
+        for (const session of project.sessions) {
+          const live = this.liveState.get(session.sessionId)
+          if (!live || !live.session.pendingPermissionRequest) {
+            this.applyEvent({
+              source: 'file',
+              kind: 'session_update',
+              sessionId: session.sessionId,
+              session
+            })
+          }
+        }
+      }
+      this.emit('change')
+    })
+  }
+
+  private applyEvent(event: AdapterEvent): void {
+    const current = this.liveState.get(event.sessionId)
+    const next = reduceEntry(current, event)
+    if (next !== undefined) {
+      this.liveState.set(event.sessionId, next)
+    }
+  }
+
+  private getTurnId(sessionId: string): number {
+    return this.turnIds.get(sessionId) ?? 0
+  }
+
+  private bumpTurnId(sessionId: string): void {
+    this.turnIds.set(sessionId, (this.turnIds.get(sessionId) ?? 0) + 1)
   }
 
   /** Wire the launcher after async creation (called from index.ts whenReady). */
@@ -59,6 +217,31 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
       this.launchedSessions.add(sessionId)
     })
     // No removal — once flightdeck owns a session, it owns it for process lifetime.
+
+    launcher.on('stopped', ({ sessionId }: { sessionId: string }) => {
+      this.liveState.delete(sessionId)
+      this.turnIds.delete(sessionId)
+    })
+
+    launcher.on('session:tool_progress', ({ sessionId, toolName }: { sessionId: string; toolName: string }) => {
+      this.applyEvent({ source: 'stdout', kind: 'tool_progress', sessionId, toolName, turnId: this.getTurnId(sessionId) })
+      this.emit('change')
+    })
+
+    launcher.on('session:control_request', ({ sessionId, requestId, toolName, input, toolUseId }: { sessionId: string; requestId: string; toolName: string; input: Record<string, unknown>; toolUseId: string }) => {
+      this.applyEvent({ source: 'stdout', kind: 'control_request', sessionId, requestId, toolName, input, toolUseId, turnId: this.getTurnId(sessionId) })
+      this.emit('change')
+      this.emit('permission_request', { sessionId, requestId, toolName, input, toolUseId })
+    })
+
+    launcher.on('session:result', ({ sessionId, subtype }: { sessionId: string; subtype: string }) => {
+      const prevTurnId = this.getTurnId(sessionId)
+      this.applyEvent({ source: 'stdout', kind: 'result', sessionId, subtype, turnId: prevTurnId })
+      this.bumpTurnId(sessionId)
+      this.emit('change')
+      // After turn ends, let file-watch reconcile after file settles.
+      setTimeout(() => this.emit('change'), 500)
+    })
   }
 
   start(): void {
@@ -106,6 +289,23 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
     // Swallow the error on the queued chain so the next send can proceed.
     this.sessionQueues.set(sessionId, next.catch(() => {}))
     return next
+  }
+
+  /**
+   * Respond to a pending permission request (allow or deny).
+   */
+  async respondPermission(sessionId: string, permissionId: string, response: 'once' | 'always' | 'reject'): Promise<void> {
+    if (!this.launcher) throw new Error('ClaudeFileWatchAdapter: launcher not wired')
+    const live = this.liveState.get(sessionId)
+    const pending = live?.session.pendingPermissionRequest
+    if (!pending || pending.requestId !== permissionId) {
+      throw new Error(`no pending permission request ${permissionId} for session ${sessionId}`)
+    }
+    const allow = response === 'once' || response === 'always'
+    this.launcher.respondToPermission(sessionId, permissionId, allow, pending.input)
+    // Optimistically clear approval state
+    this.applyEvent({ source: 'stdout', kind: 'result', sessionId, subtype: 'permission_responded', turnId: this.getTurnId(sessionId) })
+    this.emit('change')
   }
 
   /**
@@ -232,6 +432,12 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
   private async doSend(sessionId: string, text: string): Promise<void> {
     if (!this.launcher) throw new Error('ClaudeFileWatchAdapter: launcher not wired')
 
+    // If a subprocess is already running for this session, write to its stdin.
+    if (this.launcher.hasActiveSession(sessionId)) {
+      this.launcher.sendToStdin(sessionId, text)
+      return
+    }
+
     // External-process guard: if there is a pid for this session that we did
     // NOT launch, refuse and tell the user to reply from their terminal.
     const processes = this.monitor.getProcesses()
@@ -302,18 +508,29 @@ export class ClaudeFileWatchAdapter extends EventEmitter implements Adapter {
       id: claudeProject.path,
       name: claudeProject.name,
       path: claudeProject.path,
-      sessions: claudeProject.sessions.map((s) => ({
-        id: s.sessionId,
-        agentType: 'claude-code' as const,
-        state: s.state as 'running' | 'idle' | 'error' | 'question',
-        currentAction: s.currentAction,
-        startedAt: s.startedAt,
-        lastActivity: s.lastActivity,
-        projectId: claudeProject.path,
-        instanceKey: `claude:${s.pid}`,
-        pendingPermission: null,
-        ...(s.statusLine !== undefined ? { statusLine: s.statusLine } : {})
-      }))
+      sessions: claudeProject.sessions.map((s) => {
+        const live = this.liveState.get(s.sessionId)
+        const session = live?.session ?? s
+        return {
+          id: session.sessionId,
+          agentType: 'claude-code' as const,
+          state: session.state as 'running' | 'idle' | 'error' | 'question' | 'approval',
+          currentAction: session.currentAction,
+          startedAt: s.startedAt,
+          lastActivity: s.lastActivity,
+          projectId: claudeProject.path,
+          instanceKey: `claude:${s.pid}`,
+          pendingPermission: session.pendingPermissionRequest
+            ? {
+                id: session.pendingPermissionRequest.requestId,
+                type: session.pendingPermissionRequest.toolName,
+                title: `Allow ${session.pendingPermissionRequest.toolName}`,
+                metadata: session.pendingPermissionRequest.input
+              }
+            : null,
+          ...(s.statusLine !== undefined ? { statusLine: s.statusLine } : {})
+        }
+      })
     }
   }
 }

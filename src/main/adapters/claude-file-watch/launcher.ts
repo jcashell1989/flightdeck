@@ -64,6 +64,7 @@ interface ManagedEntry {
   sessionId: string
   profileId: string
   directory: string
+  stdin: NodeJS.WritableStream | null
 }
 
 function instanceKey(profileId: string, directory: string, sessionId?: string): string {
@@ -138,8 +139,62 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
       }
     }
 
-    const args = ['--resume', sessionId, ...this.buildResumeArgs(prompt)]
+    const args = ['--resume', sessionId, ...this.buildResumeArgs(prompt, profile)]
     return this.spawnAndWait(args, profile, directory, options?.onStderr)
+  }
+
+  /**
+   * Returns true if a ManagedEntry exists for this sessionId (subprocess alive).
+   */
+  hasActiveSession(sessionId: string): boolean {
+    for (const entry of this.instances.values()) {
+      if (entry.sessionId === sessionId) return true
+    }
+    return false
+  }
+
+  /**
+   * Write text + newline to the stdin of the subprocess managing sessionId.
+   * Throws if no entry found or stdin is null.
+   */
+  sendToStdin(sessionId: string, text: string): void {
+    for (const entry of this.instances.values()) {
+      if (entry.sessionId === sessionId) {
+        if (!entry.stdin) throw new Error(`stdin not available for session ${sessionId}`)
+        entry.stdin.write(text + '\n')
+        return
+      }
+    }
+    throw new Error(`no active session ${sessionId}`)
+  }
+
+  /**
+   * Write a control_response JSON line to stdin to approve or deny a permission request.
+   */
+  respondToPermission(
+    sessionId: string,
+    requestId: string,
+    allow: boolean,
+    originalInput: Record<string, unknown>
+  ): void {
+    const payload = allow
+      ? {
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: requestId,
+            response: { behavior: 'allow', updatedInput: originalInput }
+          }
+        }
+      : {
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: requestId,
+            response: { behavior: 'deny', message: 'User denied this action' }
+          }
+        }
+    this.sendToStdin(sessionId, JSON.stringify(payload))
   }
 
   /**
@@ -203,6 +258,7 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
 
   /** Build args for a new `claude -p` launch (includes --model if set). */
   private buildLaunchArgs(prompt: string, profile: AgentProfile): string[] {
+    const permMode = profile.permissionMode ?? 'acceptEdits'
     const args = [
       '-p',
       prompt,
@@ -210,7 +266,7 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
       'stream-json',
       '--verbose',
       '--permission-mode',
-      'acceptEdits'
+      permMode
     ]
     if (profile.model) {
       args.push('--model', profile.model)
@@ -222,7 +278,8 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
    * Build args for resuming an existing session. No `--model` flag — the
    * resumed session already knows its model.
    */
-  private buildResumeArgs(prompt: string): string[] {
+  private buildResumeArgs(prompt: string, profile?: AgentProfile): string[] {
+    const permMode = profile?.permissionMode ?? 'acceptEdits'
     return [
       '-p',
       prompt,
@@ -230,7 +287,7 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
       'stream-json',
       '--verbose',
       '--permission-mode',
-      'acceptEdits'
+      permMode
     ]
   }
 
@@ -306,8 +363,8 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
 
-        for (const line of lines) {
-          const trimmed = line.trim()
+        for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+          const trimmed = lines[lineIdx].trim()
           if (!trimmed) continue
 
           if (!sessionId) {
@@ -335,7 +392,8 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
               process: child,
               sessionId,
               profileId: profile.id,
-              directory
+              directory,
+              stdin: child.stdin ?? null
             }
             this.instances.set(key, entry)
 
@@ -357,8 +415,61 @@ export class ClaudeLauncher extends EventEmitter implements Launcher {
 
             this.emit('started', { sessionId, directory, profileId: profile.id, pid })
             resolve({ sessionId, pid, done })
+
             child.stdout?.removeAllListeners('data')
             buffer = ''
+
+            // Post-init line processor — shared by the flush below and the new data handler.
+            const processPostInitLine = (trimmedPost: string): void => {
+              if (!trimmedPost) return
+              let parsed: Record<string, unknown>
+              try {
+                parsed = JSON.parse(trimmedPost) as Record<string, unknown>
+              } catch {
+                return
+              }
+              const type = parsed['type'] as string | undefined
+              if (type === 'control_request') {
+                const req = parsed['request'] as Record<string, unknown> | undefined
+                if (req && req['subtype'] === 'can_use_tool') {
+                  this.emit('session:control_request', {
+                    sessionId,
+                    requestId: parsed['request_id'] as string,
+                    toolName: req['tool_name'] as string,
+                    input: (req['input'] ?? {}) as Record<string, unknown>,
+                    toolUseId: req['tool_use_id'] as string
+                  })
+                }
+              } else if (type === 'tool_progress') {
+                this.emit('session:tool_progress', {
+                  sessionId,
+                  toolName: parsed['tool_name'] as string,
+                  elapsedSeconds: parsed['elapsed_time_seconds'] as number
+                })
+              } else if (type === 'result') {
+                this.emit('session:result', {
+                  sessionId,
+                  subtype: (parsed['subtype'] as string | undefined) ?? 'success'
+                })
+              }
+            }
+
+            // Flush lines that arrived in the same chunk as the init line.
+            const remainingLines = lines.slice(lineIdx + 1)
+            for (const remainingLine of remainingLines) {
+              processPostInitLine(remainingLine.trim())
+            }
+
+            // Post-init: continue reading stdout for control_request / tool_progress / result.
+            let postBuffer = ''
+            child.stdout?.on('data', (postChunk: Buffer) => {
+              postBuffer += postChunk.toString()
+              const postLines = postBuffer.split('\n')
+              postBuffer = postLines.pop() ?? ''
+              for (const postLine of postLines) {
+                processPostInitLine(postLine.trim())
+              }
+            })
           }
         }
       })

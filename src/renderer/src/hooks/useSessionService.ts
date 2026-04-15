@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Project, ConnectionStatus, AppConfig } from '../types'
+import { Project, ConnectionStatus, AppConfig, Session } from '../types'
 import { mockProjects } from '../mockData'
 
 function basename(path: string): string {
@@ -104,9 +104,24 @@ export function useSessionService(config: AppConfig | null): SessionServiceResul
     })
     api.getSnapshot().then((snap) => apply(snap, 0))
 
+    const unsubStream = api.onStreamUpdate?.((update) => {
+      if (disposed) return
+      setLiveProjects((prev) =>
+        prev.map((p) => ({
+          ...p,
+          sessions: p.sessions.map((s) =>
+            s.id === update.sessionId
+              ? { ...s, currentAction: update.currentAction, state: update.state as Session['state'] }
+              : s
+          )
+        }))
+      )
+    })
+
     return () => {
       disposed = true
       unsub()
+      unsubStream?.()
     }
   }, [useMock])
 
