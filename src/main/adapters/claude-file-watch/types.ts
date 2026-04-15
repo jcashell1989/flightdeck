@@ -6,7 +6,7 @@
  * opencode snapshot.
  */
 
-export type ClaudeSessionState = 'running' | 'idle' | 'error'
+export type ClaudeSessionState = 'running' | 'idle' | 'error' | 'question'
 
 export interface ClaudeSession {
   /** UUID from ~/.claude/sessions/<pid>.json */
@@ -23,6 +23,8 @@ export interface ClaudeSession {
   currentAction: string
   /** Unix ms of last JSONL entry (or startedAt if no entries yet) */
   lastActivity: number
+  /** Last end_turn text content, truncated to 120 chars */
+  statusLine?: string
 }
 
 export interface ClaudeProject {

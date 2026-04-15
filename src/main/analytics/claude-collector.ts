@@ -3,7 +3,7 @@ import chokidar, { FSWatcher } from 'chokidar'
 import fs from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
-import { decodeProjectPath } from '../claude/parser'
+import { decodeProjectPath } from '../adapters/claude-file-watch/parser'
 import type { ClaudeCodeSessionUsage } from './types'
 
 interface FinalizedEntry {

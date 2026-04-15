@@ -7,20 +7,25 @@ import { is } from '@electron-toolkit/utils'
 import { configStore } from './config/store'
 import { HttpServer } from './http/index'
 import { getMobileRoot } from './http/static'
-import { opencodeRegistry } from './opencode/registry'
-import { claudeMonitor } from './claude/monitor'
-import { opencodeFileWatchMonitor } from './adapters/file-watch'
-import { opencodeLauncher } from './opencode/launcher'
-import { ClaudeLauncher } from './claude/launcher'
+import { AdapterRegistry } from './adapters/registry'
+import { FlightDeckDb } from './db/index'
+import { opencodeHttpAdapter } from './adapters/opencode-http/adapter'
+import { ClaudeFileWatchAdapter } from './adapters/claude-file-watch/adapter'
+import { ClaudeMonitor } from './adapters/claude-file-watch/monitor'
+import { OpencodeFileWatchAdapter } from './adapters/opencode-file-watch/adapter'
+import { OpencodeFileWatchMonitor } from './adapters/opencode-file-watch/monitor'
+import { CodexSqliteAdapter } from './adapters/codex-sqlite/adapter'
+import { CodexMonitor } from './adapters/codex-sqlite/monitor'
+import { ClaudeLauncher } from './adapters/claude-file-watch/launcher'
 import * as ipcConfig from './ipc/config'
-import * as ipcOpencode from './ipc/opencode'
+import * as ipcSession from './ipc/session'
 import * as ipcProject from './ipc/project'
 import * as ipcProfile from './ipc/profile'
 import * as ipcInstance from './ipc/instance'
 import * as ipcAnalytics from './ipc/analytics'
 import { analyticsMonitor } from './analytics/monitor'
 import * as ipcCodex from './ipc/codex'
-import { codexMonitor } from './codex/monitor'
+import * as ipcTd from './ipc/td'
 
 // Main is bundled as ESM (electron.vite.config.ts: format 'es'), so __dirname
 // is not defined. Resolve it from import.meta.url instead.
@@ -41,12 +46,31 @@ function broadcast(channel: string, payload: unknown): void {
  */
 function registerIpc(claudeLauncher: ClaudeLauncher): void {
   ipcConfig.register(broadcast)
-  ipcOpencode.register(broadcast)
+  ipcSession.register(broadcast)
   ipcProject.register()
   ipcProfile.register()
   ipcInstance.register(claudeLauncher)
   ipcAnalytics.register(broadcast)
   ipcCodex.register(broadcast)
+  ipcTd.register(broadcast)
+}
+
+// SYNC NOTE: these --bg-base values must match the corresponding data-theme
+// blocks in src/renderer/src/theme.css. If you change a palette's bg-base
+// there, update the matching entry here too.
+const THEME_BG: Record<string, string> = {
+  'dark':             '#1D1912',
+  'light':            '#F5F0E8',
+  'tokyo-night':      '#1a1b26',
+  'catppuccin-mocha': '#1e1e2e',
+  'nord':             '#2e3440',
+}
+
+function resolveThemeBg(theme: string): string {
+  if (theme === 'os') {
+    return nativeTheme.shouldUseDarkColors ? '#1D1912' : '#F5F0E8'
+  }
+  return THEME_BG[theme] ?? '#1D1912'
 }
 
 function createWindow(): void {
@@ -57,7 +81,7 @@ function createWindow(): void {
     minHeight: 600,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 12 },
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1D1912' : '#F5F0E8',
+    backgroundColor: resolveThemeBg(configStore.get().theme),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -121,34 +145,62 @@ function migrateUserData(): void {
 
 migrateUserData()
 
+// Module-level adapter instances wired up in app.whenReady().
+const claudeMonitorInstance = new ClaudeMonitor()
+const claudeFileWatchAdapter = new ClaudeFileWatchAdapter(claudeMonitorInstance)
+const opencodeFileWatchMonitorInstance = new OpencodeFileWatchMonitor()
+const opencodeFileWatchAdapter = new OpencodeFileWatchAdapter(opencodeFileWatchMonitorInstance)
+const codexMonitorInstance = new CodexMonitor()
+const codexSqliteAdapter = new CodexSqliteAdapter(codexMonitorInstance)
+
+const flightDeckDb = new FlightDeckDb()
+const adapterRegistry = new AdapterRegistry(flightDeckDb)
+adapterRegistry.register(opencodeHttpAdapter)       // managed (canDispatch=true) — first, wins dedup
+adapterRegistry.register(claudeFileWatchAdapter)
+adapterRegistry.register(opencodeFileWatchAdapter)
+adapterRegistry.register(codexSqliteAdapter)
+
 app.whenReady().then(async () => {
+  // Set custom dock icon (macOS dev mode — packaged app uses build/icon.icns via electron-builder).
+  if (process.platform === 'darwin' && app.dock) {
+    try {
+      const { nativeImage } = await import('electron')
+      const iconPath = join(__dirname, '..', '..', 'build', 'icon.png')
+      const img = nativeImage.createFromPath(iconPath)
+      if (!img.isEmpty()) app.dock.setIcon(img)
+    } catch {
+      // Non-fatal: dock icon stays as default Electron logo in dev mode.
+    }
+  }
+
   // Config must be loaded before any IPC handler can read it.
   await configStore.init()
+  await flightDeckDb.open(join(app.getPath('userData'), 'flightdeck.db'))
+  adapterRegistry.loadHistory()
   claudeLauncher = await ClaudeLauncher.create()
   const launcher = claudeLauncher
   // Register IPC AFTER init so handlers never hit an un-initialised store,
   // and so the renderer's config:get cannot race the load.
+  ipcSession.init(adapterRegistry, opencodeHttpAdapter)
   registerIpc(launcher)
-  // Wire dispatched sessions into the monitor for immediate JSONL watch.
+  // Wire the launcher into the claude file-watch adapter for send/abort.
+  claudeFileWatchAdapter.setLauncher(launcher)
+  // Wire dispatched sessions into the claude monitor for immediate JSONL watch.
   launcher.on('started', ({ pid, sessionId, directory }: { pid: number; sessionId: string; directory: string }) => {
-    claudeMonitor.trackLaunchedSession({ pid, sessionId, cwd: directory, startedAt: Date.now() })
+    claudeFileWatchAdapter.getMonitor().trackLaunchedSession({ pid, sessionId, cwd: directory, startedAt: Date.now() })
   })
-  // Wire monitors into the registry before starting any of them.
-  opencodeRegistry.setClaudeMonitor(claudeMonitor)
-  opencodeRegistry.setOpencodeFileWatch(opencodeFileWatchMonitor)
-  opencodeRegistry.setCodexMonitor(codexMonitor)
-  opencodeRegistry.start()
-  claudeMonitor.start()
+  // Start all adapters (each handles mock mode guard internally).
+  adapterRegistry.start()
   analyticsMonitor.start()
-  opencodeFileWatchMonitor.start()
-  codexMonitor.start()
+  // Broadcast snapshot changes on the new channel.
+  ipcSession.attachBroadcast(adapterRegistry, broadcast)
 
   // ── HTTP server (Slice 3.2 / 3.4) ────────────────────────────────────────
   const hs = new HttpServer({
-    getSnapshot: () => opencodeRegistry.snapshot(),
+    getSnapshot: () => adapterRegistry.snapshot(),
     onSnapshotChange: (cb) => {
-      opencodeRegistry.on('change', cb)
-      return () => opencodeRegistry.removeListener('change', cb)
+      adapterRegistry.on('change', cb)
+      return () => adapterRegistry.removeListener('change', cb)
     },
     dispatch: async (args) => {
       const cfg = configStore.get()
@@ -159,28 +211,19 @@ app.whenReady().then(async () => {
         return claudeLauncher.launch(profile, args.directory, args.prompt)
       }
       if (profile.agentType === 'opencode') {
-        const { opencodeLauncher: ol } = await import('./opencode/launcher')
-        const { opencodeRegistry: reg } = await import('./opencode/registry')
-        const { waitForClientConnected } = await import('./util/shell')
-        const port = await ol.launch(profile, args.directory)
-        const managedKey = `managed:${args.profileId}:${args.directory}`
-        const client = reg.ensureManagedClient({ host: '127.0.0.1', port, label: profile.label }, managedKey)
-        await waitForClientConnected(client)
-        const sessionId = await client.createSession(args.directory)
-        await client.sendPrompt(sessionId, args.prompt)
-        return { sessionId }
+        return opencodeHttpAdapter.dispatch({
+          profileId: args.profileId,
+          directory: args.directory,
+          prompt: args.prompt
+        })
       }
       throw new Error(`unsupported agent type: ${profile.agentType}`)
     },
     respond: async (sessionId, permissionId, response) => {
-      const client = opencodeRegistry.findClientForSession(sessionId)
-      if (!client) throw new Error(`no client owns session ${sessionId}`)
-      await client.respondPermission(sessionId, permissionId, response)
+      await adapterRegistry.respondPermission(sessionId, permissionId, response)
     },
     abort: async (sessionId) => {
-      const client = opencodeRegistry.findClientForSession(sessionId)
-      if (!client) throw new Error(`no client owns session ${sessionId}`)
-      await client.abortSession(sessionId)
+      await adapterRegistry.abort(sessionId)
     },
     getToken: () => configStore.get().http.token,
     getMobileRoot,
@@ -237,7 +280,7 @@ app.on('window-all-closed', () => {
  * SIGTERM'd children have a chance to exit, leaving them as zombies owned
  * by init.
  */
-let claudeLauncher: import('./claude/launcher').ClaudeLauncher | null = null
+let claudeLauncher: import('./adapters/claude-file-watch/launcher').ClaudeLauncher | null = null
 let httpServer: HttpServer | null = null
 let shuttingDown = false
 app.on('before-quit', (event) => {
@@ -246,13 +289,12 @@ app.on('before-quit', (event) => {
   shuttingDown = true
   void (async () => {
     try {
-      opencodeRegistry.dispose()
-      claudeMonitor.dispose()
+      adapterRegistry.dispose()
       analyticsMonitor.dispose()
-      opencodeFileWatchMonitor.dispose()
-      codexMonitor.dispose()
+      ipcTd.dispose()
+      flightDeckDb.close()
       await Promise.all([
-        opencodeLauncher.stopAllAsync(),
+        opencodeHttpAdapter.getLauncher().stopAllAsync(),
         claudeLauncher?.stopAllAsync() ?? Promise.resolve(),
         httpServer?.stop() ?? Promise.resolve(),
       ])

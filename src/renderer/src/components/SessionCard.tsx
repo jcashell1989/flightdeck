@@ -76,8 +76,10 @@ export function SessionCard({ session, focused, onClick }: SessionCardProps) {
   const borderWidth = session.state === 'idle' ? 2 : 3
   const elapsedMs = now - session.startedAt
 
-  // Abort button: only meaningful for running opencode sessions (claude-code is monitor-only).
-  const canAbort = session.state === 'running' && session.agentType === 'opencode'
+  // Abort button: use adapter-stamped canAbort when present, fall back to agentType heuristic.
+  const canAbort =
+    session.state === 'running' &&
+    (session.canAbort ?? session.agentType === 'opencode')
 
   const handleAbort = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -160,6 +162,21 @@ export function SessionCard({ session, focused, onClick }: SessionCardProps) {
       >
         {ACTION_ICONS[session.state]} {session.currentAction}
       </div>
+
+      {/* Status line: last end_turn text snippet */}
+      {session.statusLine && (
+        <div
+          style={{
+            fontSize: 11,
+            color: 'var(--fg-subtle)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {session.statusLine}
+        </div>
+      )}
 
       {/* Status row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>

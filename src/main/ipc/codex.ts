@@ -1,5 +1,5 @@
 import { safeHandle } from './_helpers'
-import { codexMonitor } from '../codex/monitor'
+import { codexMonitor } from '../adapters/codex-sqlite/monitor'
 
 type BroadcastFn = (channel: string, payload: unknown) => void
 

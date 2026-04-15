@@ -5,6 +5,9 @@ import type { MessageRecord, ProcessResult } from '../electronAPI'
 import { useSessionDetail } from '../hooks/useSessionDetail'
 import { parseSlashCommand } from '../../../shared/commandParser'
 import { CommandPalette, type CommandPaletteHandle } from './CommandPalette'
+import { TicketCard } from './TicketCard'
+import { TicketDetail } from './TicketDetail'
+import type { TdTicket, TdUsageResult } from '../../../shared/types'
 
 interface ContextPanelProps {
   session: Session | null
@@ -15,7 +18,7 @@ interface ContextPanelProps {
   onToggleFullScreen: () => void
 }
 
-type Tab = 'conversation' | 'diff' | 'todo'
+type Tab = 'conversation' | 'diff' | 'todo' | 'logs'
 
 export function ContextPanel({
   session,
@@ -39,7 +42,7 @@ export function ContextPanel({
   return (
     <div
       style={{
-        flex: fullScreen ? '1 1 100%' : 2,
+        flex: fullScreen ? '1 1 100%' : '2 1 0%',
         minWidth: 0,
         borderLeft: '1px solid var(--border)',
         backgroundColor: 'var(--bg-panel)',
@@ -101,6 +104,9 @@ export function ContextPanel({
         <TabButton active={tab === 'todo'} onClick={() => setTab('todo')}>
           Todo
         </TabButton>
+        <TabButton active={tab === 'logs'} onClick={() => setTab('logs')}>
+          Logs
+        </TabButton>
       </div>
 
       {/* Tab body */}
@@ -114,6 +120,7 @@ export function ContextPanel({
         )}
         {tab === 'diff' && <DiffTab project={project} useMock={useMock} />}
         {tab === 'todo' && <TodoTab project={project} useMock={useMock} />}
+        {tab === 'logs' && <LogsTab session={session} useMock={useMock} />}
       </div>
     </div>
   )
@@ -192,11 +199,13 @@ function ConversationTab({
     el.scrollTop = el.scrollHeight
   }, [lastMessageFingerprint])
 
+  // Use adapter-stamped canReply when present; fall back to state-based heuristic.
   const canReply =
     !useMock &&
-    (session.state === 'running' ||
-      session.state === 'idle' ||
-      session.state === 'question')
+    (session.canReply ??
+      (session.state === 'running' ||
+        session.state === 'idle' ||
+        session.state === 'question'))
 
   const handleSend = useCallback(async () => {
     const text = replyDraft.trim()
@@ -210,10 +219,11 @@ function ConversationTab({
     setSendError(null)
     try {
       // Slash command routing: /cmd args → sendCommand; plain text → sendPrompt.
-      // Only for managed opencode sessions (claude-code and file-watch are read-only).
+      // Only for sessions that support commands (adapter stamps canCommand).
       const canDispatchCommands =
-        session.agentType === 'opencode' &&
-        !session.instanceKey?.startsWith('opencode-file-watch:')
+        session.canCommand ??
+        (session.agentType === 'opencode' &&
+          !session.instanceKey?.startsWith('opencode-file-watch:'))
       const parsed = canDispatchCommands ? parseSlashCommand(text) : null
       if (parsed) {
         await api.sendCommand(session.id, parsed.command, parsed.args)
@@ -601,6 +611,93 @@ function bannerBtn(color: string): CSSProperties {
   }
 }
 
+// ─── Logs Tab ─────────────────────────────────────────────────────────────
+
+function LogsTab({ session, useMock }: { session: Session; useMock: boolean }) {
+  const [lines, setLines] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+
+  const fetchLogs = useCallback(async () => {
+    if (useMock) return
+    const api = window.electronAPI?.opencode
+    if (!api?.getSessionLogs) {
+      setError('getSessionLogs not available')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await api.getSessionLogs(session.id)
+      setLines(result)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [session.id, useMock])
+
+  useEffect(() => {
+    void fetchLogs()
+  }, [fetchLogs])
+
+  // Auto-scroll to bottom when lines change.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [lines])
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div
+        style={{
+          padding: '6px 12px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          flexShrink: 0
+        }}
+      >
+        <button onClick={() => void fetchLogs()} style={headerBtn}>
+          Refresh
+        </button>
+      </div>
+      <div ref={scrollRef} style={{ flex: 1, overflow: 'auto', padding: 12, minHeight: 0 }}>
+        {loading && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>loading logs…</div>
+        )}
+        {error && (
+          <div style={{ color: 'var(--status-error)', fontSize: 11 }}>{error}</div>
+        )}
+        {useMock && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 11, marginBottom: 8 }}>
+            mock mode — no live logs
+          </div>
+        )}
+        {!loading && !error && !useMock && lines.length === 0 && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>no stderr output</div>
+        )}
+        {lines.length > 0 && (
+          <pre
+            className="mono"
+            style={{
+              fontSize: 11,
+              lineHeight: 1.4,
+              margin: 0,
+              color: 'var(--fg-muted)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all'
+            }}
+          >
+            {lines.join('\n')}
+          </pre>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Diff Tab ─────────────────────────────────────────────────────────────
 
 interface DiffFile {
@@ -739,49 +836,99 @@ function diffLineColor(line: string): string {
 // ─── Todo Tab ─────────────────────────────────────────────────────────────
 
 function TodoTab({ project, useMock }: { project: Project | null; useMock: boolean }) {
-  const result = useShellResult(project?.path ?? null, useMock, 'getTodo')
+  const [data, setData] = useState<TdUsageResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<TdTicket | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  const refresh = useCallback(async () => {
+    if (useMock || !project?.path) return
+    const api = window.electronAPI?.td
+    if (!api) return
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await api.usage(project.path)
+      setData(result)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [project?.path, useMock])
+
+  const loadDetail = useCallback(async (id: string) => {
+    const api = window.electronAPI?.td
+    if (!api) return
+    setSelectedId(id)
+    setDetailLoading(true)
+    try {
+      const t = await api.show(id, project?.path)
+      setDetail(t)
+    } catch {
+      setDetail(null)
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [project?.path])
+
+  useEffect(() => { void refresh() }, [refresh])
+
+  // Subscribe to push updates from file-watcher.
+  useEffect(() => {
+    const api = window.electronAPI?.td
+    if (!api?.onTdChange) return
+    const unsub = api.onTdChange(project?.path, () => { void refresh() })
+    return unsub
+  }, [project?.path, refresh])
+
+  const sections: { label: string; tickets: TdTicket[] }[] = []
+  if (data) {
+    if (data.focused) sections.push({ label: 'Focused', tickets: [data.focused] })
+    if (data.in_progress.length) sections.push({ label: 'In Progress', tickets: data.in_progress })
+    if (data.reviewable.length) sections.push({ label: 'Review', tickets: data.reviewable })
+    if (data.ready.length) sections.push({ label: 'Ready', tickets: data.ready })
+  }
+
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <div
-        style={{
-          padding: '6px 12px',
-          borderBottom: '1px solid var(--border)',
-          display: 'flex',
-          justifyContent: 'flex-end',
-          flexShrink: 0
-        }}
-      >
-        <button onClick={result.refresh} style={headerBtn}>
-          Refresh
-        </button>
-      </div>
-      <div style={{ flex: 1, overflow: 'auto', padding: 12, minHeight: 0 }}>
-        {result.loading && (
-          <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>running td…</div>
+    <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      {/* Ticket list */}
+      <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button onClick={() => void refresh()} style={headerBtn}>Refresh</button>
+        </div>
+        {loading && <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>loading…</div>}
+        {error && <div style={{ color: 'var(--status-error)', fontSize: 11 }}>{error}</div>}
+        {useMock && <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>mock mode — no td output</div>}
+        {!loading && !error && !useMock && !data && <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>no td data</div>}
+        {!loading && !error && !useMock && data && sections.length === 0 && (
+          <div style={{ color: 'var(--fg-subtle)', fontSize: 11 }}>no tickets</div>
         )}
-        {result.error && (
-          <div style={{ color: 'var(--status-error)', fontSize: 11 }}>{result.error}</div>
-        )}
-        {useMock && (
-          <div style={{ color: 'var(--fg-subtle)', fontSize: 11, marginBottom: 8 }}>
-            mock mode — no live td output
+        {sections.map((sec) => (
+          <div key={sec.label} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+              {sec.label}
+            </div>
+            {sec.tickets.map((t) => (
+              <TicketCard key={t.id} ticket={t} selected={t.id === selectedId} onClick={loadDetail} />
+            ))}
           </div>
-        )}
-        {result.data && (
-          <pre
-            className="mono"
-            style={{
-              fontSize: 11,
-              lineHeight: 1.4,
-              margin: 0,
-              color: 'var(--fg-primary)',
-              whiteSpace: 'pre-wrap'
-            }}
-          >
-            {result.data.stdout || result.data.stderr || '(no output)'}
-          </pre>
-        )}
+        ))}
       </div>
+      {/* Detail panel */}
+      {selectedId && (
+        <div style={{ width: 260, flexShrink: 0, borderLeft: '1px solid var(--border)', overflow: 'auto' }}>
+          <TicketDetail
+            ticket={detail}
+            loading={detailLoading}
+            onStart={async (id) => { await window.electronAPI?.td?.start(id, project?.path); void refresh() }}
+            onHandoff={async (id) => { await window.electronAPI?.td?.handoff(id, project?.path); void refresh() }}
+            onLog={async (id, msg) => { await window.electronAPI?.td?.log(id, msg, project?.path); void refresh() }}
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -789,7 +936,7 @@ function TodoTab({ project, useMock }: { project: Project | null; useMock: boole
 function useShellResult(
   path: string | null,
   useMock: boolean,
-  method: 'getDiff' | 'getTodo'
+  method: 'getDiff'
 ): {
   data: ProcessResult | null
   loading: boolean

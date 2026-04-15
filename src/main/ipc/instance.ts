@@ -1,9 +1,8 @@
 import { configStore } from '../config/store'
-import { opencodeRegistry } from '../opencode/registry'
-import { opencodeLauncher } from '../opencode/launcher'
+import { opencodeHttpAdapter } from '../adapters/opencode-http/adapter'
 import { safeHandle } from './_helpers'
-import { waitForClientConnected, validPath } from '../util/shell'
-import type { ClaudeLauncher } from '../claude/launcher'
+import { validPath } from '../util/shell'
+import type { ClaudeLauncher } from '../adapters/claude-file-watch/launcher'
 
 export function register(claudeLauncher: ClaudeLauncher): void {
   safeHandle(
@@ -28,19 +27,12 @@ export function register(claudeLauncher: ClaudeLauncher): void {
       }
 
       if (profile.agentType === 'opencode') {
-        // Launch (or reuse) the managed opencode serve instance.
-        const port = await opencodeLauncher.launch(profile, args.directory)
-        const managedKey = `managed:${args.profileId}:${args.directory}`
-        const instance = { host: '127.0.0.1', port, label: profile.label }
-
-        // Ensure the registry has a connected client for this instance.
-        const client = opencodeRegistry.ensureManagedClient(instance, managedKey)
-
-        await waitForClientConnected(client)
-
-        const sessionId = await client.createSession(args.directory)
-        await client.sendPrompt(sessionId, args.prompt)
-        return { sessionId }
+        return opencodeHttpAdapter.dispatch({
+          profileId: args.profileId,
+          directory: args.directory,
+          prompt: args.prompt,
+          sessionId: args.sessionId
+        })
       }
 
       throw new Error(`unsupported agent type: ${profile.agentType}`)

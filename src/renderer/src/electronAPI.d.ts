@@ -9,7 +9,9 @@ import type {
   OpencodeSnapshotPayload,
   ProcessResult,
   ProjectConfig,
-  ProjectValidationResult
+  ProjectValidationResult,
+  TdTicket,
+  TdUsageResult
 } from './types'
 
 // Re-export for backward compat with earlier `import { MessageRecord } from '../electronAPI'`.
@@ -37,6 +39,7 @@ export interface ElectronAPI {
     abortSession: (sessionId: string) => Promise<{ ok: boolean }>
     sendCommand: (sessionId: string, command: string, args: string) => Promise<{ ok: boolean }>
     listCommands: (sessionId: string) => Promise<CommandDefinition[]>
+    getSessionLogs: (sessionId: string) => Promise<string[]>
     createSession: (args: {
       instanceKey?: string
       directory: string
@@ -44,7 +47,6 @@ export interface ElectronAPI {
       title?: string
     }) => Promise<{ sessionId: string }>
     getDiff: (path: string) => Promise<ProcessResult>
-    getTodo: (path: string) => Promise<ProcessResult>
   }
   project: {
     validate: (path: string) => Promise<ProjectValidationResult>
@@ -79,6 +81,15 @@ export interface ElectronAPI {
   codex: {
     getSnapshot: () => Promise<CodexSnapshot>
     onSnapshot: (cb: (snap: CodexSnapshot) => void) => () => void
+  }
+  td: {
+    list: (cwd?: string) => Promise<TdTicket[]>
+    show: (id: string, cwd?: string) => Promise<TdTicket | null>
+    start: (id: string, cwd?: string) => Promise<void>
+    log: (id: string, message: string, cwd?: string) => Promise<void>
+    handoff: (id: string, cwd?: string) => Promise<void>
+    usage: (cwd?: string) => Promise<TdUsageResult>
+    onTdChange: (cwd: string | undefined, cb: () => void) => () => void
   }
 }
 

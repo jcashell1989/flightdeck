@@ -7,12 +7,18 @@ import type {
   AgentProfile,
   AppConfig,
   OpencodeInstance,
-  ProjectConfig
+  ProjectConfig,
+  ThemeId
 } from '../../shared/types'
 
 // Re-export for backward compatibility with existing import paths.
 // New code should import directly from `src/shared/types`.
 export type { AgentProfile, AppConfig, OpencodeInstance, ProjectConfig }
+
+const VALID_THEME_IDS: ThemeId[] = ['os', 'dark', 'light', 'tokyo-night', 'catppuccin-mocha', 'nord']
+function isValidThemeId(v: unknown): v is ThemeId {
+  return typeof v === 'string' && (VALID_THEME_IDS as string[]).includes(v)
+}
 
 /**
  * On-disk shape for AgentProfile — apiKey is replaced by apiKeyEncrypted.
@@ -31,6 +37,7 @@ interface PersistedConfig {
   http: AppConfig['http']
   projects: AppConfig['projects']
   profiles: PersistedProfile[]
+  theme: ThemeId
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -38,7 +45,8 @@ const DEFAULT_CONFIG: AppConfig = {
   mock: { enabled: true },
   http: { enabled: false, bindAddress: '0.0.0.0', port: 4097, token: '' },
   projects: [],
-  profiles: []
+  profiles: [],
+  theme: 'dark' as ThemeId
 }
 
 // ── Crypto abstraction ─────────────────────────────────────────────────────
@@ -135,7 +143,8 @@ export function toPersisted(
     mock: cfg.mock,
     http: cfg.http,
     projects: cfg.projects,
-    profiles
+    profiles,
+    theme: cfg.theme
   }
 }
 
@@ -212,6 +221,7 @@ export function fromPersisted(
     mock: persisted.mock,
     http: persisted.http ?? DEFAULT_CONFIG.http,
     projects: persisted.projects,
+    theme: isValidThemeId(persisted.theme) ? persisted.theme : 'dark',
     profiles
   }
 }
@@ -299,6 +309,12 @@ export function validatePatch(patch: unknown): Partial<AppConfig> {
     if ('port' in hObj && typeof hObj['port'] !== 'number') throw new Error('invalid config patch: http.port must be a number')
     if ('bindAddress' in hObj && typeof hObj['bindAddress'] !== 'string') throw new Error('invalid config patch: http.bindAddress must be a string')
     if ('token' in hObj && typeof hObj['token'] !== 'string') throw new Error('invalid config patch: http.token must be a string')
+  }
+
+  if ('theme' in p) {
+    if (!isValidThemeId(p['theme'])) {
+      throw new Error('invalid config patch: theme must be one of: ' + VALID_THEME_IDS.join(', '))
+    }
   }
 
   if ('profiles' in p) {
@@ -449,7 +465,8 @@ class ConfigStore extends EventEmitter {
       mock: patch.mock ?? base.mock,
       http: patch.http ?? base.http,
       projects: patch.projects ?? base.projects,
-      profiles: patch.profiles ?? base.profiles
+      profiles: patch.profiles ?? base.profiles,
+      theme: patch.theme ?? base.theme
     }
   }
 

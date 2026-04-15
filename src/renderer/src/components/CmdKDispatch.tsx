@@ -128,7 +128,7 @@ export function CmdKDispatch({
       (s) =>
         s.id === sessionMode &&
         (
-          (s.agentType === 'opencode' && (s.state === 'running' || s.state === 'idle' || s.state === 'question')) ||
+          ((s.canReply ?? s.agentType === 'opencode') && (s.state === 'running' || s.state === 'idle' || s.state === 'question')) ||
           (s.agentType === 'claude-code' && (s.state === 'idle' || s.state === 'error'))
         )
     )
@@ -376,7 +376,7 @@ export function CmdKDispatch({
             {target?.sessions
               .filter(
                 (s) =>
-                  (s.agentType === 'opencode' &&
+                  ((s.canReply ?? s.agentType === 'opencode') &&
                     (s.state === 'running' || s.state === 'idle' || s.state === 'question')) ||
                   (s.agentType === 'claude-code' && (s.state === 'idle' || s.state === 'error'))
               )

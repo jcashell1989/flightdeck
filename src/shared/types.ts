@@ -11,6 +11,8 @@
 
 // ── Config types ──────────────────────────────────────────────────────────
 
+export type ThemeId = 'os' | 'dark' | 'light' | 'tokyo-night' | 'catppuccin-mocha' | 'nord'
+
 export interface OpencodeInstance {
   host: string
   port: number
@@ -72,6 +74,7 @@ export interface AppConfig {
   http: HttpConfig
   projects: ProjectConfig[]
   profiles: AgentProfile[]
+  theme: ThemeId
 }
 
 // ── Session / snapshot types ──────────────────────────────────────────────
@@ -103,6 +106,18 @@ export interface Session {
   projectId: string
   instanceKey?: string
   pendingPermission?: PendingPermission | null
+  /** Adapter that owns this session (stamped by AdapterRegistry). Optional during transition. */
+  adapterId?: string
+  /** Whether the session is managed (dispatchable) or watched (read-only). */
+  controlMode?: 'managed' | 'watched'
+  /** Whether the session accepts reply prompts. */
+  canReply?: boolean
+  /** Whether the session accepts slash commands. */
+  canCommand?: boolean
+  /** Whether the session can be aborted. */
+  canAbort?: boolean
+  /** Last end_turn text content, truncated to 120 chars with newlines collapsed. */
+  statusLine?: string
 }
 
 export interface Project {
@@ -194,6 +209,28 @@ export interface CodexSession {
 
 export interface CodexSnapshot {
   sessions: CodexSession[]
+}
+
+// ── td types ─────────────────────────────────────────────────────────────
+
+export interface TdTicket {
+  id: string
+  title: string
+  description: string
+  status: 'open' | 'in_progress' | 'in_review' | 'approved' | 'closed'
+  priority: string
+  type: string
+  created_at: string
+  updated_at: string
+  implementer_session: string
+  logs: Array<{ message: string; timestamp: string; type: string; session: string }>
+}
+
+export interface TdUsageResult {
+  focused: TdTicket | null
+  in_progress: TdTicket[]
+  ready: TdTicket[]
+  reviewable: TdTicket[]
 }
 
 // ── Analytics types ───────────────────────────────────────────────────────

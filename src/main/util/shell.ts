@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import type { OpencodeInstanceClient } from '../opencode/client'
+import type { OpencodeInstanceClient } from '../adapters/opencode-http/client'
 import type { ProcessResult } from '../../shared/types'
 
 export function runCmd(

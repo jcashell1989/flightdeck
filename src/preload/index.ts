@@ -3,15 +3,32 @@ import type {
   AgentProfile,
   AnalyticsSummary,
   AppConfig,
+  CodexSnapshot,
   CommandDefinition,
   GitStatusResult,
   MessageRecord,
   OpencodeSnapshotPayload,
   ProcessResult,
   ProjectConfig,
-  ProjectValidationResult
+  ProjectValidationResult,
+  TdTicket,
+  TdUsageResult
 } from '../shared/types'
-import type { CodexSnapshot } from '../shared/types'
+import { TD_DEFAULT_WATCH_KEY } from '../shared/td'
+
+const pendingWatchOpsByCwd = new Map<string, Promise<unknown>>()
+
+function queueTdWatchOp(cwd: string | undefined, channel: 'td:watch' | 'td:unwatch'): void {
+  const key = cwd ?? TD_DEFAULT_WATCH_KEY
+  const previous = pendingWatchOpsByCwd.get(key) ?? Promise.resolve()
+  const next = previous
+    .catch(() => undefined)
+    .then(() => ipcRenderer.invoke(channel, cwd))
+    .finally(() => {
+      if (pendingWatchOpsByCwd.get(key) === next) pendingWatchOpsByCwd.delete(key)
+    })
+  pendingWatchOpsByCwd.set(key, next)
+}
 
 contextBridge.exposeInMainWorld('electronAPI', {
   getTheme: (): Promise<'dark' | 'light'> => ipcRenderer.invoke('get-theme'),
@@ -30,36 +47,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
   opencode: {
-    getSnapshot: (): Promise<OpencodeSnapshotPayload> => ipcRenderer.invoke('opencode:snapshot'),
+    getSnapshot: (): Promise<OpencodeSnapshotPayload> => ipcRenderer.invoke('agent:snapshot'),
     onSnapshot: (cb: (snap: OpencodeSnapshotPayload) => void): (() => void) => {
       const handler = (_e: IpcRendererEvent, snap: OpencodeSnapshotPayload): void => cb(snap)
-      ipcRenderer.on('opencode:snapshot', handler)
-      return () => ipcRenderer.removeListener('opencode:snapshot', handler)
+      ipcRenderer.on('agent:snapshot', handler)
+      return () => ipcRenderer.removeListener('agent:snapshot', handler)
     },
     getMessages: (sessionId: string): Promise<MessageRecord[]> =>
-      ipcRenderer.invoke('opencode:session:messages', sessionId),
+      ipcRenderer.invoke('agent:messages', sessionId),
     sendPrompt: (sessionId: string, text: string): Promise<{ ok: boolean }> =>
-      ipcRenderer.invoke('opencode:session:prompt', sessionId, text),
+      ipcRenderer.invoke('agent:send', sessionId, text),
     respondPermission: (
       sessionId: string,
       permissionId: string,
       response: 'once' | 'always' | 'reject'
     ): Promise<{ ok: boolean }> =>
-      ipcRenderer.invoke('opencode:session:respond', sessionId, permissionId, response),
+      ipcRenderer.invoke('agent:respond-permission', sessionId, permissionId, response),
     abortSession: (sessionId: string): Promise<{ ok: boolean }> =>
-      ipcRenderer.invoke('opencode:session:abort', sessionId),
+      ipcRenderer.invoke('agent:abort', sessionId),
     sendCommand: (sessionId: string, command: string, args: string): Promise<{ ok: boolean }> =>
-      ipcRenderer.invoke('opencode:session:command', sessionId, command, args),
+      ipcRenderer.invoke('agent:send-command', sessionId, command, args),
     listCommands: (sessionId: string): Promise<CommandDefinition[]> =>
-      ipcRenderer.invoke('opencode:commands:list', sessionId),
+      ipcRenderer.invoke('agent:list-commands', sessionId),
+    getSessionLogs: (sessionId: string): Promise<string[]> =>
+      ipcRenderer.invoke('agent:logs', sessionId),
     createSession: (args: {
       instanceKey?: string
       directory: string
       prompt: string
       title?: string
-    }): Promise<{ sessionId: string }> => ipcRenderer.invoke('opencode:session:create', args),
-    getDiff: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('opencode:diff', path),
-    getTodo: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('opencode:todo', path)
+    }): Promise<{ sessionId: string }> => ipcRenderer.invoke('agent:dispatch', args),
+    getDiff: (path: string): Promise<ProcessResult> => ipcRenderer.invoke('project:diff', path)
   },
   project: {
     validate: (path: string): Promise<ProjectValidationResult> =>
@@ -109,6 +127,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const handler = (_e: IpcRendererEvent, snap: CodexSnapshot): void => cb(snap)
       ipcRenderer.on('codex:snapshot', handler)
       return () => ipcRenderer.removeListener('codex:snapshot', handler)
+    }
+  },
+  td: {
+    list: (cwd?: string): Promise<TdTicket[]> => ipcRenderer.invoke('td:list', cwd),
+    show: (id: string, cwd?: string): Promise<TdTicket | null> => ipcRenderer.invoke('td:show', id, cwd),
+    start: (id: string, cwd?: string): Promise<void> => ipcRenderer.invoke('td:start', id, cwd),
+    log: (id: string, message: string, cwd?: string): Promise<void> => ipcRenderer.invoke('td:log', id, message, cwd),
+    handoff: (id: string, cwd?: string): Promise<void> => ipcRenderer.invoke('td:handoff', id, cwd),
+    usage: (cwd?: string): Promise<TdUsageResult> => ipcRenderer.invoke('td:usage', cwd),
+    onTdChange: (cwd: string | undefined, cb: () => void): (() => void) => {
+      const expectedCwd = cwd ?? null
+      const handler = (_event: IpcRendererEvent, payload?: { cwd?: string | null }): void => {
+        if ((payload?.cwd ?? null) === expectedCwd) cb()
+      }
+      ipcRenderer.on('td:change', handler)
+      queueTdWatchOp(cwd, 'td:watch')
+      return () => {
+        ipcRenderer.removeListener('td:change', handler)
+        queueTdWatchOp(cwd, 'td:unwatch')
+      }
     }
   }
 })

@@ -4,7 +4,7 @@
  * These are intentionally separate from the renderer's Session/Project types
  * in src/renderer/src/types.ts — the mapper translates between them.
  */
-import type { OpencodeInstance } from '../config/store'
+import type { OpencodeInstance } from '../../config/store'
 
 export type NormalizedSessionState =
   | 'running'
