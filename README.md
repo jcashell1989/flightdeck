@@ -4,7 +4,11 @@ A desktop dashboard for running multiple AI coding agents across multiple
 projects — without losing track of any of them.
 
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
-![Status](https://img.shields.io/badge/status-early%20development-orange)
+![Status](https://img.shields.io/badge/status-paused-grey)
+
+## Status
+
+Paused pending genuine gaps found on existing tooling.
 
 ## What it does
 
